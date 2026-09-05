@@ -55,6 +55,7 @@ uv sync                              # install
 uv run kanji-app                     # run the app
 uv run python scripts/check.py       # ruff + ruff format + mypy + pytest
 uv run pytest                        # tests only
+uv run python -m scripts.build_db    # rebuild kanji_app/resources/kanji.db
 ```
 
 Run `scripts/check.py` and make it green before considering a change done.
@@ -66,8 +67,20 @@ Run `scripts/check.py` and make it green before considering a change done.
 - `ui/`: light smoke tests only (constructs, signals) — don't over-invest.
 - Every behavioural change lands with a test.
 
+## Data pipeline (`scripts/`, dev-only, not shipped)
+
+- `scripts/build_db.py` orchestrates; `import_kanjidic.py` / `import_kanjivg.py`
+  do the work; `_common.py` has shared helpers.
+- Run as modules: `uv run python -m scripts.build_db`.
+- The pipeline is scoped to a **charset file** (`resources/jlpt/n5.txt`) — one
+  kanji per line, `#` comments allowed. Add more list files to widen coverage.
+- Sources are cached under `resources/_cache/` (gitignored). `kanji.db` itself
+  IS committed.
+- Importer tests seed the DB with SQL fixtures (`kanji_db` fixture); they don't
+  run the network importers, except `test_import_kanjidic.py` which parses a
+  small inline XML sample.
+
 ## Not yet built
 
-`services/`, `ui/view_models/`, most of `ui/`, the data importers, and
-`data/repositories.py` are stubs or empty. Build them phase by phase per
-PLAN.md — don't scaffold ahead of the current phase.
+`services/`, `ui/view_models/`, and most of `ui/` are stubs or empty. Build them
+phase by phase per PLAN.md — don't scaffold ahead of the current phase.

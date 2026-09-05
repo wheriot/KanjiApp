@@ -91,6 +91,7 @@ class Kanji:
     readings: tuple[Reading, ...] = ()
     grade: int | None = None
     jlpt: int | None = None
+    jlpt_old: int | None = None
     frequency: int | None = None
     radical: str | None = None
 

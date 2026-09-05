@@ -37,12 +37,29 @@ Or all at once:
 uv run python scripts/check.py
 ```
 
+## Data pipeline
+
+The shipped reference database `kanji_app/resources/kanji.db` is built from
+KANJIDIC2 and KanjiVG, scoped to a charset file (`kanji_app/resources/jlpt/n5.txt`):
+
+```
+uv run python -m scripts.build_db          # downloads + caches sources, builds N5 db
+```
+
+Widen coverage by adding e.g. `kanji_app/resources/jlpt/n4.txt` and rerunning with
+`--charset ... --jlpt 4`. Individual importers: `scripts.import_kanjidic`,
+`scripts.import_kanjivg`.
+
 ## Project status
 
-Phase 0 — skeleton. See [PLAN.md](PLAN.md) § "Feature roadmap".
+Phase 1 — data pipeline. `kanji.db` holds 103 N5 kanji with readings, meanings and
+stroke-order SVGs. See [PLAN.md](PLAN.md) § "Feature roadmap".
 
 ## Data & licenses
 
-Kanji data will be built from KANJIDIC2, KanjiVG, JMdict and Tatoeba. Each carries an
-attribution requirement (CC BY-SA / EDRDG); the app will ship a Credits screen. See
+- **KANJIDIC2** — © EDRDG, CC BY-SA 4.0
+- **KanjiVG** — © Ulrich Apel / KanjiVG, CC BY-SA 3.0
+- JMdict / Tatoeba will be added with vocabulary support (Phase 7)
+
+Attribution is required; the app will ship a Credits screen. See
 [PLAN.md](PLAN.md) § "Data sources".

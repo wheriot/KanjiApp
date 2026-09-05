@@ -123,15 +123,16 @@ README.md
 - **Exit check:** app opens, `pytest` green, `ruff`/`mypy` clean
 
 ### Phase 1 — Data pipeline (week 1–2)
-- Importer scripts for KANJIDIC2 + KanjiVG + (subset of) JMdict
-- Build `resources/kanji.db`
-- `KanjiRepo` with lookup by literal, by JLPT, by grade, text search
-- Tests against a small fixture DB
-- **Exit check:** can query "all N5 kanji" and "detail for 水" from a REPL
+- Importer scripts for **KANJIDIC2** and **KanjiVG** (JMdict/vocab deferred to Phase 7)
+- Pipeline is scoped to a **charset file** (`resources/jlpt/n5.txt`); adding `n4.txt` etc. later and rebuilding is all it takes to widen coverage
+- `scripts/build_db.py` produces the shipped `kanji_app/resources/kanji.db`
+- `KanjiRepo` with lookup by literal, by JLPT, by grade, stroke count, text search; stroke-order SVG lookup
+- Tests against a small fixture DB (seeded by SQL, not by running the importers)
+- **Exit check:** can query "all N5 kanji" and "detail for 水" (readings, meanings, stroke SVG) from a REPL ✅ (103 N5 kanji, all with stroke SVGs; `kanji.db` ~560 KB)
 
 ### Phase 2 — Kanji browser (week 2–3)
 - `kanji_browser_view`: grid/list, filter by JLPT/grade/stroke count, search box
-- `kanji_detail_view`: readings, meanings, example vocab, frequency
+- `kanji_detail_view`: readings, meanings, frequency (example vocab arrives with Phase 7)
 - `stroke_order_widget`: static KanjiVG render first, then stroke-by-stroke animation
 - **Exit check:** browse and inspect any kanji, see stroke order
 

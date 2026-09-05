@@ -35,6 +35,9 @@ src = ["kanji_app", "tests", "scripts"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 
+[tool.ruff.lint.isort]
+known-first-party = ["kanji_app", "scripts"]
+
 [tool.mypy]
 python_version = "3.12"
 strict = true
