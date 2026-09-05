@@ -130,11 +130,13 @@ README.md
 - Tests against a small fixture DB (seeded by SQL, not by running the importers)
 - **Exit check:** can query "all N5 kanji" and "detail for 水" (readings, meanings, stroke SVG) from a REPL ✅ (103 N5 kanji, all with stroke SVGs; `kanji.db` ~560 KB)
 
-### Phase 2 — Kanji browser (week 2–3)
-- `kanji_browser_view`: grid/list, filter by JLPT/grade/stroke count, search box
-- `kanji_detail_view`: readings, meanings, frequency (example vocab arrives with Phase 7)
-- `stroke_order_widget`: static KanjiVG render first, then stroke-by-stroke animation
-- **Exit check:** browse and inspect any kanji, see stroke order
+### Phase 2 — Kanji browser (week 2–3) ✅
+- `browser_view`: grid of kanji, search box (literal/meaning/reading), JLPT/grade/stroke-count filters, splitter to the detail panel
+- `kanji_detail_panel`: literal, meanings, on/kun readings, stroke count + JLPT/grade/frequency (example vocab arrives with Phase 7)
+- `stroke_order_widget`: renders KanjiVG via `QSvgRenderer` (paths, not fonts); static view + Play animation + a scrub slider. `core/kanjivg.py` parses + re-emits SVG one stroke at a time (pure, tested)
+- `services/catalog.py` (`KanjiCatalog`) + `ui/view_models/catalog_vm.py` (`CatalogViewModel`)
+- **Exit check:** browse/filter/search 103 N5 kanji, inspect any one, watch its stroke order ✅
+- Note: CJK glyphs in labels use the system font until Noto Sans JP is bundled (Phase 5); the stroke widget is font-independent
 
 ### Phase 3 — SRS review loop (week 3–5) — core value
 - `srs.py` wrapper around FSRS; `review_session.py` builds the due queue

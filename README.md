@@ -52,8 +52,9 @@ Widen coverage by adding e.g. `kanji_app/resources/jlpt/n4.txt` and rerunning wi
 
 ## Project status
 
-Phase 1 — data pipeline. `kanji.db` holds 103 N5 kanji with readings, meanings and
-stroke-order SVGs. See [PLAN.md](PLAN.md) § "Feature roadmap".
+Phase 2 — kanji browser. `uv run kanji-app` opens the Browse screen: search/filter
+the 103 N5 kanji, inspect readings + meanings, and watch stroke order animate.
+See [PLAN.md](PLAN.md) § "Feature roadmap".
 
 ## Data & licenses
 

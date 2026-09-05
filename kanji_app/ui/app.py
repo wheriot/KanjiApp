@@ -7,6 +7,7 @@ import sys
 from PySide6.QtWidgets import QApplication
 
 from kanji_app.config import Paths
+from kanji_app.services.catalog import open_bundled_catalog
 from kanji_app.ui.main_window import MainWindow
 
 
@@ -23,6 +24,6 @@ def build_app(argv: list[str] | None = None) -> QApplication:
 def run(argv: list[str] | None = None) -> int:
     app = build_app(argv)
     _ = Paths.resolve()  # resolved now so path problems surface at startup
-    window = MainWindow()
+    window = MainWindow(catalog=open_bundled_catalog())
     window.show()
     return app.exec()

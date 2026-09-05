@@ -31,51 +31,69 @@ class KanjiRepo:
 
     # -- list queries -------------------------------------------------------
 
-    def list_by_jlpt(self, level: int) -> list[Kanji]:
-        rows = self._conn.execute(
-            "SELECT * FROM kanji WHERE jlpt = ? ORDER BY frequency IS NULL, frequency, literal",
-            (level,),
-        ).fetchall()
-        return self._hydrate(rows)
+    def find(
+        self,
+        *,
+        text: str = "",
+        jlpt: int | None = None,
+        grade: int | None = None,
+        stroke_count: int | None = None,
+        limit: int = 500,
+    ) -> list[Kanji]:
+        """Filtered kanji list. ``text`` matches a literal, meaning, or reading.
 
-    def list_by_grade(self, grade: int) -> list[Kanji]:
-        rows = self._conn.execute(
-            "SELECT * FROM kanji WHERE grade = ? ORDER BY frequency IS NULL, frequency, literal",
-            (grade,),
-        ).fetchall()
-        return self._hydrate(rows)
+        Results are ordered by newspaper frequency (most common first, unranked
+        last), then by literal.
+        """
+        conditions: list[str] = []
+        params: dict[str, object] = {"limit": limit}
 
-    def list_by_stroke_count(self, strokes: int) -> list[Kanji]:
-        rows = self._conn.execute(
-            "SELECT * FROM kanji WHERE stroke_count = ? ORDER BY literal", (strokes,)
-        ).fetchall()
-        return self._hydrate(rows)
+        text = text.strip()
+        if text:
+            conditions.append(
+                "(k.literal = :exact"
+                " OR EXISTS (SELECT 1 FROM meaning m WHERE m.kanji_id = k.id"
+                "            AND m.value LIKE :like)"
+                " OR EXISTS (SELECT 1 FROM reading r WHERE r.kanji_id = k.id"
+                "            AND r.value LIKE :like))"
+            )
+            params["exact"] = text
+            params["like"] = f"%{text}%"
+        if jlpt is not None:
+            conditions.append("k.jlpt = :jlpt")
+            params["jlpt"] = jlpt
+        if grade is not None:
+            conditions.append("k.grade = :grade")
+            params["grade"] = grade
+        if stroke_count is not None:
+            conditions.append("k.stroke_count = :strokes")
+            params["strokes"] = stroke_count
 
-    def all(self) -> list[Kanji]:
-        rows = self._conn.execute("SELECT * FROM kanji ORDER BY literal").fetchall()
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        rows = self._conn.execute(
+            f"SELECT k.* FROM kanji k {where} "
+            "ORDER BY k.frequency IS NULL, k.frequency, k.literal LIMIT :limit",
+            params,
+        ).fetchall()
         return self._hydrate(rows)
 
     def search(self, query: str, limit: int = 50) -> list[Kanji]:
         """Match a single kanji character, an English meaning, or a reading."""
-        query = query.strip()
-        if not query:
+        if not query.strip():
             return []
-        like = f"%{query}%"
+        return self.find(text=query, limit=limit)
+
+    def all(self) -> list[Kanji]:
+        return self.find()
+
+    def distinct_values(self, column: str) -> list[int]:
+        """Sorted distinct non-null values of ``jlpt``, ``grade``, or ``stroke_count``."""
+        if column not in {"jlpt", "grade", "stroke_count"}:
+            raise ValueError(f"not a filterable column: {column}")
         rows = self._conn.execute(
-            """
-            SELECT DISTINCT k.*
-            FROM kanji k
-            LEFT JOIN meaning m ON m.kanji_id = k.id
-            LEFT JOIN reading r ON r.kanji_id = k.id
-            WHERE k.literal = :exact
-               OR m.value LIKE :like
-               OR r.value LIKE :like
-            ORDER BY k.frequency IS NULL, k.frequency, k.literal
-            LIMIT :limit
-            """,
-            {"exact": query, "like": like, "limit": limit},
+            f"SELECT DISTINCT {column} AS v FROM kanji WHERE {column} IS NOT NULL ORDER BY v"
         ).fetchall()
-        return self._hydrate(rows)
+        return [int(r["v"]) for r in rows]
 
     # -- stroke order -----------------------------------------------------
 

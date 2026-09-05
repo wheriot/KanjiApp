@@ -80,7 +80,20 @@ Run `scripts/check.py` and make it green before considering a change done.
   run the network importers, except `test_import_kanjidic.py` which parses a
   small inline XML sample.
 
+## UI wiring (as of Phase 2)
+
+- `ui/app.py` builds a `KanjiCatalog` from the bundled `kanji.db` and hands it to
+  `MainWindow`, which owns the screen stack and closes the catalog on exit.
+- Browse screen: `BrowserView` ← `CatalogViewModel` ← `KanjiCatalog` (service).
+  Views never import `data`; the view-model exposes plain properties + two Qt
+  signals (`results_changed`, `selection_changed`).
+- `StrokeOrderWidget` renders SVG from `core/kanjivg.render()` through a
+  `QSvgRenderer` — no font dependency. `_Canvas.paintEvent` does the drawing.
+- Tests: services/view-models use the `kanji_db` SQL fixture; widget/view tests
+  call `build_app([])` first (Qt runs `offscreen`, set in `conftest.py`).
+
 ## Not yet built
 
-`services/`, `ui/view_models/`, and most of `ui/` are stubs or empty. Build them
-phase by phase per PLAN.md — don't scaffold ahead of the current phase.
+`Dashboard` / `Review` / `Stats` / `Settings` screens are placeholders. The
+`review_session` / SRS-loop wiring starts in Phase 3. Don't scaffold ahead of
+the current phase.

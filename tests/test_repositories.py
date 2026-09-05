@@ -22,14 +22,27 @@ def test_get_by_literal_unknown_returns_none(kanji_db: sqlite3.Connection) -> No
     assert KanjiRepo(kanji_db).get_by_literal("龘") is None
 
 
-def test_list_by_jlpt_orders_known_frequency_first(kanji_db: sqlite3.Connection) -> None:
-    literals = [k.literal for k in KanjiRepo(kanji_db).list_by_jlpt(5)]
+def test_find_by_jlpt_orders_known_frequency_first(kanji_db: sqlite3.Connection) -> None:
+    literals = [k.literal for k in KanjiRepo(kanji_db).find(jlpt=5)]
     assert literals == ["一", "水", "山"]  # freq 2, 223, then NULL
 
 
-def test_list_by_grade(kanji_db: sqlite3.Connection) -> None:
-    assert len(KanjiRepo(kanji_db).list_by_grade(1)) == 3
-    assert KanjiRepo(kanji_db).list_by_grade(2) == []
+def test_find_by_grade(kanji_db: sqlite3.Connection) -> None:
+    assert len(KanjiRepo(kanji_db).find(grade=1)) == 3
+    assert KanjiRepo(kanji_db).find(grade=2) == []
+
+
+def test_find_combines_filters(kanji_db: sqlite3.Connection) -> None:
+    repo = KanjiRepo(kanji_db)
+    assert [k.literal for k in repo.find(jlpt=5, stroke_count=3)] == ["山"]
+    assert [k.literal for k in repo.find(text="water", grade=1)] == ["水"]
+    assert repo.find(text="water", stroke_count=99) == []
+
+
+def test_distinct_values(kanji_db: sqlite3.Connection) -> None:
+    repo = KanjiRepo(kanji_db)
+    assert repo.distinct_values("stroke_count") == [1, 3, 4]
+    assert repo.distinct_values("jlpt") == [5]
 
 
 def test_search_matches_literal_meaning_and_reading(kanji_db: sqlite3.Connection) -> None:
