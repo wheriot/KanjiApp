@@ -24,6 +24,7 @@ from kanji_app.core.models import (
     ReadingType,
     SchedulingState,
     SubjectType,
+    Vocab,
 )
 from kanji_app.core.srs import ReviewResult
 
@@ -125,6 +126,21 @@ class KanjiRepo:
         ).fetchall()
         return [int(r["v"]) for r in rows]
 
+    def count_by_jlpt(self) -> dict[int, int]:
+        rows = self._conn.execute(
+            "SELECT jlpt, COUNT(*) AS n FROM kanji WHERE jlpt IS NOT NULL GROUP BY jlpt"
+        ).fetchall()
+        return {int(r["jlpt"]): int(r["n"]) for r in rows}
+
+    def jlpt_by_id(self, ids: Iterable[int]) -> dict[int, int | None]:
+        ids = list(ids)
+        if not ids:
+            return {}
+        rows = self._conn.execute(
+            f"SELECT id, jlpt FROM kanji WHERE id IN ({_marks(ids)})", tuple(ids)
+        ).fetchall()
+        return {int(r["id"]): r["jlpt"] for r in rows}
+
     # -- stroke order -----------------------------------------------------
 
     def stroke_svg(self, kanji_id: int) -> str | None:
@@ -186,6 +202,83 @@ def _marks(items: Iterable[object]) -> str:
     return ", ".join("?" for _ in items)
 
 
+class VocabRepo:
+    """Read access to the reference vocabulary list."""
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self._conn = conn
+
+    def get(self, vocab_id: int) -> Vocab | None:
+        row = self._conn.execute("SELECT * FROM vocab WHERE id = ?", (vocab_id,)).fetchone()
+        return self._hydrate([row])[0] if row else None
+
+    def find(self, text: str = "", limit: int = 500) -> list[Vocab]:
+        text = text.strip()
+        if text:
+            like = f"%{text}%"
+            rows = self._conn.execute(
+                """
+                SELECT DISTINCT v.* FROM vocab v
+                LEFT JOIN vocab_gloss g ON g.vocab_id = v.id
+                WHERE v.expression LIKE :like OR v.kana LIKE :like OR g.value LIKE :like
+                ORDER BY length(v.expression), v.expression
+                LIMIT :limit
+                """,
+                {"like": like, "limit": limit},
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT * FROM vocab ORDER BY length(expression), expression LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return self._hydrate(rows)
+
+    def for_kanji(self, kanji_id: int, limit: int = 30) -> list[Vocab]:
+        rows = self._conn.execute(
+            """
+            SELECT v.* FROM vocab v
+            JOIN vocab_kanji vk ON vk.vocab_id = v.id
+            WHERE vk.kanji_id = ?
+            ORDER BY length(v.expression), v.expression
+            LIMIT ?
+            """,
+            (kanji_id, limit),
+        ).fetchall()
+        return self._hydrate(rows)
+
+    def count(self) -> int:
+        return int(self._conn.execute("SELECT COUNT(*) FROM vocab").fetchone()[0])
+
+    def _hydrate(self, rows: Sequence[sqlite3.Row]) -> list[Vocab]:
+        rows = [r for r in rows if r is not None]
+        if not rows:
+            return []
+        ids = [r["id"] for r in rows]
+        glosses: dict[int, list[str]] = defaultdict(list)
+        for g in self._conn.execute(
+            f"SELECT vocab_id, value FROM vocab_gloss WHERE vocab_id IN ({_marks(ids)})",
+            tuple(ids),
+        ):
+            glosses[g["vocab_id"]].append(g["value"])
+        links: dict[int, list[int]] = defaultdict(list)
+        for link in self._conn.execute(
+            f"SELECT vocab_id, kanji_id FROM vocab_kanji WHERE vocab_id IN ({_marks(ids)})",
+            tuple(ids),
+        ):
+            links[link["vocab_id"]].append(link["kanji_id"])
+        return [
+            Vocab(
+                id=r["id"],
+                expression=r["expression"],
+                kana=r["kana"],
+                jlpt=r["jlpt"],
+                glosses=tuple(glosses.get(r["id"], ())),
+                kanji_ids=tuple(links.get(r["id"], ())),
+            )
+            for r in rows
+        ]
+
+
 class DeckRepo:
     """Study decks (lives in the writable study database)."""
 
@@ -213,6 +306,37 @@ class DeckRepo:
         existing = self.all()
         return existing[0] if existing else self.create("My N5 Kanji")
 
+    def update(
+        self,
+        deck_id: int,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        new_per_day: int | None = None,
+        reviews_per_day: int | None = None,
+    ) -> Deck:
+        current = self.get(deck_id)
+        assert current is not None
+        self._conn.execute(
+            """
+            UPDATE deck SET name = ?, description = ?, new_per_day = ?, reviews_per_day = ?
+            WHERE id = ?
+            """,
+            (
+                name if name is not None else current.name,
+                description if description is not None else current.description,
+                new_per_day if new_per_day is not None else current.new_per_day,
+                reviews_per_day if reviews_per_day is not None else current.reviews_per_day,
+                deck_id,
+            ),
+        )
+        updated = self.get(deck_id)
+        assert updated is not None
+        return updated
+
+    def delete(self, deck_id: int) -> None:
+        self._conn.execute("DELETE FROM deck WHERE id = ?", (deck_id,))
+
     @staticmethod
     def _row(row: sqlite3.Row) -> Deck:
         return Deck(
@@ -237,6 +361,12 @@ class CardRepo:
             "SELECT * FROM card WHERE deck_id = ? ORDER BY id", (deck_id,)
         ).fetchall()
         return [self._row(r) for r in rows]
+
+    def count_for_deck(self, deck_id: int) -> int:
+        row = self._conn.execute(
+            "SELECT COUNT(*) FROM card WHERE deck_id = ?", (deck_id,)
+        ).fetchone()
+        return int(row[0])
 
     def get(self, card_id: int) -> Card | None:
         row = self._conn.execute("SELECT * FROM card WHERE id = ?", (card_id,)).fetchone()
@@ -289,6 +419,35 @@ class CardRepo:
             """,
             {"id": card_id, **_scheduling_params(scheduling)},
         )
+
+    # -- aggregates (for stats) ------------------------------------
+
+    def state_breakdown(self, deck_id: int) -> dict[CardState, int]:
+        rows = self._conn.execute(
+            "SELECT state, COUNT(*) AS n FROM card WHERE deck_id = ? GROUP BY state",
+            (deck_id,),
+        ).fetchall()
+        return {CardState(r["state"]): int(r["n"]) for r in rows}
+
+    def subject_ids(self, deck_id: int, *, learned_only: bool = False) -> set[int]:
+        """Distinct kanji ids with a card in this deck (optionally past the 'new' stage)."""
+        clause = "AND state != 'new'" if learned_only else ""
+        rows = self._conn.execute(
+            f"SELECT DISTINCT subject_id FROM card "
+            f"WHERE deck_id = ? AND subject_type = 'kanji' {clause}",
+            (deck_id,),
+        ).fetchall()
+        return {int(r["subject_id"]) for r in rows}
+
+    def due_dates_between(self, deck_id: int, start: datetime, end: datetime) -> list[datetime]:
+        rows = self._conn.execute(
+            """
+            SELECT due FROM card
+            WHERE deck_id = ? AND state != 'new' AND due >= ? AND due < ?
+            """,
+            (deck_id, _iso(start), _iso(end)),
+        ).fetchall()
+        return [_dt(r["due"]) for r in rows]
 
     @staticmethod
     def _row(row: sqlite3.Row) -> Card:
@@ -367,6 +526,57 @@ class ReviewLogRepo:
             (deck_id, _iso(since)),
         ).fetchone()
         return int(row[0])
+
+    def timestamps_since(self, deck_id: int, since: datetime) -> list[datetime]:
+        rows = self._conn.execute(
+            """
+            SELECT rl.reviewed_at FROM review_log rl
+            JOIN card c ON c.id = rl.card_id
+            WHERE c.deck_id = ? AND rl.reviewed_at >= ?
+            ORDER BY rl.reviewed_at
+            """,
+            (deck_id, _iso(since)),
+        ).fetchall()
+        return [_dt(r["reviewed_at"]) for r in rows]
+
+    def retention_since(self, deck_id: int, since: datetime) -> tuple[int, int]:
+        """(passed, total) over reviews of already-learned cards (prev_stability > 0).
+
+        A review counts as passed when it was not rated "Again".
+        """
+        row = self._conn.execute(
+            """
+            SELECT COUNT(*) AS total,
+                   SUM(CASE WHEN rl.rating != 1 THEN 1 ELSE 0 END) AS passed
+            FROM review_log rl
+            JOIN card c ON c.id = rl.card_id
+            WHERE c.deck_id = ? AND rl.reviewed_at >= ? AND rl.prev_stability > 0
+            """,
+            (deck_id, _iso(since)),
+        ).fetchone()
+        total = int(row["total"])
+        return (int(row["passed"] or 0), total)
+
+
+class SettingsRepo:
+    """The ``setting`` key/value table in the study database."""
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self._conn = conn
+
+    def get(self, key: str) -> str | None:
+        row = self._conn.execute("SELECT value FROM setting WHERE key = ?", (key,)).fetchone()
+        return row["value"] if row else None
+
+    def set(self, key: str, value: str) -> None:
+        self._conn.execute(
+            "INSERT INTO setting (key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (key, value),
+        )
+
+    def all(self) -> dict[str, str]:
+        return {r["key"]: r["value"] for r in self._conn.execute("SELECT key, value FROM setting")}
 
 
 def _scheduling_params(s: SchedulingState) -> dict[str, object]:

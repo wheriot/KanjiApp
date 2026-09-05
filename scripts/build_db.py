@@ -18,6 +18,8 @@ from pathlib import Path
 
 from kanji_app.data import db
 from scripts._common import CHARSET_DIR, DEFAULT_DB, load_charset
+from scripts.import_jmdict import _resolve_source as resolve_jmdict
+from scripts.import_jmdict import import_jmdict
 from scripts.import_kanjidic import _resolve_source as resolve_kanjidic
 from scripts.import_kanjidic import import_kanjidic
 from scripts.import_kanjivg import _resolve_source as resolve_kanjivg
@@ -37,6 +39,8 @@ def main() -> int:
     parser.add_argument("--jlpt", type=int, default=5, help="JLPT level to tag the charset with")
     parser.add_argument("--kanjidic", help="path or URL to kanjidic2.xml(.gz)")
     parser.add_argument("--kanjivg", help="path or URL to a KanjiVG zip / directory")
+    parser.add_argument("--jmdict", help="path or URL to JMdict_e(.gz)")
+    parser.add_argument("--no-vocab", action="store_true", help="skip the JMdict vocab import")
     parser.add_argument("--out", type=Path, default=DEFAULT_DB)
     args = parser.parse_args()
 
@@ -47,6 +51,7 @@ def main() -> int:
     print("resolving sources...")
     kanjidic_path = resolve_kanjidic(args.kanjidic)
     kanjivg_path = resolve_kanjivg(args.kanjivg)
+    jmdict_path = None if args.no_vocab else resolve_jmdict(args.jmdict)
 
     _reset_db(args.out)
     conn = db.connect(args.out)
@@ -64,6 +69,13 @@ def main() -> int:
     print("importing KanjiVG...")
     n_svg, missing = import_kanjivg(kanjivg_path, conn, charset)
 
+    n_vocab = 0
+    if jmdict_path is not None:
+        print("importing JMdict vocab...")
+        n_vocab = import_jmdict(jmdict_path, conn, charset)
+        with db.transaction(conn):
+            conn.execute("UPDATE vocab SET jlpt = ?", (args.jlpt,))
+
     # Ship a compact, single-file database (no WAL sidecars).
     conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
     conn.execute("PRAGMA journal_mode = DELETE")
@@ -77,7 +89,8 @@ def main() -> int:
     print(
         f"\nbuilt {args.out} ({size_kb:.0f} KB)\n"
         f"  kanji:           {n_kanji}\n"
-        f"  stroke diagrams: {n_svg}"
+        f"  stroke diagrams: {n_svg}\n"
+        f"  vocab:           {n_vocab}"
     )
     if missing:
         print(f"  no KanjiVG for:  {' '.join(missing)}")

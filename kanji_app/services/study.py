@@ -18,21 +18,55 @@ from pathlib import Path
 
 from kanji_app.config import BUNDLED_DB, Paths
 from kanji_app.core import review_session
-from kanji_app.core.models import Card, CardMode, Deck, Kanji, Rating, SubjectType
+from kanji_app.core.kanjivg import StrokeDrawing
+from kanji_app.core.kanjivg import parse as parse_kanjivg
+from kanji_app.core.models import (
+    Card,
+    CardMode,
+    Deck,
+    Kanji,
+    Rating,
+    ReadingType,
+    SubjectType,
+    Vocab,
+)
 from kanji_app.core.review_session import DeckCounts
 from kanji_app.core.srs import FsrsScheduler, Scheduler
 from kanji_app.data import db
-from kanji_app.data.repositories import CardRepo, DeckRepo, KanjiRepo, ReviewLogRepo
+from kanji_app.data.repositories import CardRepo, DeckRepo, KanjiRepo, ReviewLogRepo, VocabRepo
+from kanji_app.services.settings import AppSettings, SettingsStore
+from kanji_app.services.stats import StatsService
 
 _STUDY_MODES = (CardMode.RECOGNITION, CardMode.RECALL)
 
 
 @dataclass(frozen=True, slots=True)
 class ReviewItem:
-    """A queued card together with the kanji it is about."""
+    """A queued card with its faces already rendered to text.
+
+    ``prompt`` / ``prompt_note`` are always visible; ``answer`` / ``answer_note``
+    are shown on reveal. ``stroke`` (kanji cards only) is shown on reveal.
+    """
 
     card: Card
-    kanji: Kanji
+    prompt: str
+    prompt_note: str
+    answer: str
+    answer_note: str
+    stroke: StrokeDrawing | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class TodaySummary:
+    """What the dashboard shows: work waiting and work already done today."""
+
+    due: int
+    new_available: int
+    reviewed_today: int
+
+    @property
+    def waiting(self) -> int:
+        return self.due + self.new_available
 
 
 class StudyService:
@@ -48,7 +82,23 @@ class StudyService:
         self._cards = CardRepo(study_conn)
         self._log = ReviewLogRepo(study_conn)
         self._kanji = KanjiRepo(reference_conn)
-        self._scheduler = scheduler or FsrsScheduler()
+        self._vocab = VocabRepo(reference_conn)
+        self._settings_store = SettingsStore(study_conn)
+        self._settings = self._settings_store.load()
+        self._scheduler = scheduler or FsrsScheduler(self._settings.fsrs_retention)
+
+    # -- settings ---------------------------------------------------
+
+    @property
+    def settings(self) -> AppSettings:
+        return self._settings
+
+    def update_settings(self, new: AppSettings) -> AppSettings:
+        self._settings = self._settings_store.save(new)
+        # Only a scheduler built from a custom `scheduler=` arg is left alone.
+        if isinstance(self._scheduler, FsrsScheduler):
+            self._scheduler = FsrsScheduler(self._settings.fsrs_retention)
+        return self._settings
 
     # -- decks --------------------------------------------------------
 
@@ -58,26 +108,60 @@ class StudyService:
     def default_deck(self) -> Deck:
         return self._decks.ensure_default()
 
+    def get_deck(self, deck_id: int) -> Deck | None:
+        return self._decks.get(deck_id)
+
+    def create_deck(self, name: str) -> Deck:
+        return self._decks.create(name)
+
+    def update_deck(
+        self,
+        deck_id: int,
+        *,
+        name: str | None = None,
+        new_per_day: int | None = None,
+        reviews_per_day: int | None = None,
+    ) -> Deck:
+        return self._decks.update(
+            deck_id, name=name, new_per_day=new_per_day, reviews_per_day=reviews_per_day
+        )
+
+    def delete_deck(self, deck_id: int) -> None:
+        self._decks.delete(deck_id)
+
+    def deck_card_count(self, deck_id: int) -> int:
+        return self._cards.count_for_deck(deck_id)
+
     # -- building a collection --------------------------------------
 
     def is_in_deck(self, deck_id: int, kanji_id: int) -> bool:
-        modes = self._cards.modes_for_subject(deck_id, SubjectType.KANJI, kanji_id)
-        return set(_STUDY_MODES).issubset(modes)
+        return self._subject_in_deck(deck_id, SubjectType.KANJI, kanji_id)
+
+    def is_vocab_in_deck(self, deck_id: int, vocab_id: int) -> bool:
+        return self._subject_in_deck(deck_id, SubjectType.VOCAB, vocab_id)
 
     def add_kanji(self, deck_id: int, kanji_id: int, now: datetime | None = None) -> int:
-        """Create the recognition + recall cards for a kanji. Returns cards added."""
+        return self._add_subject(deck_id, SubjectType.KANJI, kanji_id, now)
+
+    def add_vocab(self, deck_id: int, vocab_id: int, now: datetime | None = None) -> int:
+        return self._add_subject(deck_id, SubjectType.VOCAB, vocab_id, now)
+
+    def _subject_in_deck(self, deck_id: int, subject_type: SubjectType, subject_id: int) -> bool:
+        modes = self._cards.modes_for_subject(deck_id, subject_type, subject_id)
+        return set(_STUDY_MODES).issubset(modes)
+
+    def _add_subject(
+        self, deck_id: int, subject_type: SubjectType, subject_id: int, now: datetime | None
+    ) -> int:
+        """Create the recognition + recall cards for a subject. Returns cards added."""
         moment = now or datetime.now(UTC)
-        existing = self._cards.modes_for_subject(deck_id, SubjectType.KANJI, kanji_id)
+        existing = self._cards.modes_for_subject(deck_id, subject_type, subject_id)
         added = 0
         with db.transaction(self._study):
             for mode in _STUDY_MODES:
                 if mode not in existing:
                     self._cards.create(
-                        deck_id,
-                        SubjectType.KANJI,
-                        kanji_id,
-                        mode,
-                        self._scheduler.new_state(moment),
+                        deck_id, subject_type, subject_id, mode, self._scheduler.new_state(moment)
                     )
                     added += 1
         return added
@@ -87,6 +171,20 @@ class StudyService:
     def deck_counts(self, deck_id: int, now: datetime | None = None) -> DeckCounts:
         moment = now or datetime.now(UTC)
         return review_session.counts(self._cards.for_deck(deck_id), moment)
+
+    def today_summary(self, deck_id: int, now: datetime | None = None) -> TodaySummary:
+        moment = now or datetime.now(UTC)
+        deck = self._decks.get(deck_id)
+        raw = review_session.counts(self._cards.for_deck(deck_id), moment)
+        if deck is None:
+            return TodaySummary(due=raw.due, new_available=raw.new, reviewed_today=0)
+        since = review_session.day_start(moment)
+        new_done = self._log.count_new_since(deck_id, since)
+        return TodaySummary(
+            due=raw.due,
+            new_available=max(0, min(raw.new, deck.new_per_day - new_done)),
+            reviewed_today=self._log.count_since(deck_id, since),
+        )
 
     def start_session(self, deck_id: int, now: datetime | None = None) -> list[ReviewItem]:
         moment = now or datetime.now(UTC)
@@ -118,14 +216,70 @@ class StudyService:
     # -- internals ------------------------------------------------
 
     def _to_item(self, card: Card) -> ReviewItem | None:
-        if card.subject_type != SubjectType.KANJI:
-            return None
-        kanji = self._kanji.get(card.subject_id)
-        return ReviewItem(card=card, kanji=kanji) if kanji else None
+        if card.subject_type == SubjectType.KANJI:
+            kanji = self._kanji.get(card.subject_id)
+            return _kanji_item(card, kanji, self._stroke_drawing(kanji)) if kanji else None
+        vocab = self._vocab.get(card.subject_id)
+        return _vocab_item(card, vocab) if vocab else None
+
+    def _stroke_drawing(self, kanji: Kanji) -> StrokeDrawing | None:
+        svg = self._kanji.stroke_svg(kanji.id)
+        return parse_kanjivg(svg) if svg else None
+
+    def stats_service(self) -> StatsService:
+        """A :class:`StatsService` sharing this service's two connections."""
+        return StatsService(self._study, self._reference)
 
     def close(self) -> None:
         self._study.close()
         self._reference.close()
+
+
+def _readings(kanji: Kanji) -> str:
+    on = "、".join(kanji.readings_of(ReadingType.ON))
+    kun = "、".join(kanji.readings_of(ReadingType.KUN))
+    return "  /  ".join(p for p in (on, kun) if p)
+
+
+def _kanji_item(card: Card, kanji: Kanji, stroke: StrokeDrawing | None) -> ReviewItem:
+    meanings = ", ".join(m.value for m in kanji.meanings)
+    readings = _readings(kanji)
+    if card.mode == CardMode.RECALL:
+        return ReviewItem(
+            card=card,
+            prompt=meanings,
+            prompt_note=readings,
+            answer=kanji.literal,
+            answer_note="",
+            stroke=stroke,
+        )
+    return ReviewItem(
+        card=card,
+        prompt=kanji.literal,
+        prompt_note="",
+        answer=meanings,
+        answer_note=readings,
+        stroke=stroke,
+    )
+
+
+def _vocab_item(card: Card, vocab: Vocab) -> ReviewItem:
+    glosses = ", ".join(vocab.glosses)
+    if card.mode == CardMode.RECALL:
+        return ReviewItem(
+            card=card,
+            prompt=glosses,
+            prompt_note="",
+            answer=vocab.expression,
+            answer_note=vocab.kana,
+        )
+    return ReviewItem(
+        card=card,
+        prompt=vocab.expression,
+        prompt_note="",
+        answer=glosses,
+        answer_note=vocab.kana,
+    )
 
 
 def open_study_service(data_dir: Path | None = None) -> StudyService:

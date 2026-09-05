@@ -17,6 +17,7 @@ APP_NAME = "KanjiApp"
 PACKAGE_ROOT = Path(__file__).resolve().parent
 RESOURCES_DIR = PACKAGE_ROOT / "resources"
 ASSETS_DIR = PACKAGE_ROOT / "assets"
+FONTS_DIR = ASSETS_DIR / "fonts"
 
 # The database that ships with the app (read-only template, built by scripts/).
 BUNDLED_DB = RESOURCES_DIR / "kanji.db"

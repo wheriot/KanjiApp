@@ -102,7 +102,37 @@ Run `scripts/check.py` and make it green before considering a change done.
 - `core/review_session.py` is pure; `StudyService` is the stateful orchestrator;
   `ReviewViewModel` tracks cursor + reveal state.
 
-## Not yet built
+## Stats (Phase 4)
 
-`Dashboard` / `Stats` / `Settings` screens are placeholders (Phases 4–5). Multiple
-decks = Phase 6, vocab = Phase 7. Don't scaffold ahead of the current phase.
+- `services/stats.py` (`StatsService`) reads `review_log` + card states and
+  returns a `StatsReport`. Day bucketing uses `core.review_session.day_start`
+  (04:00 boundary). "Mature" reviews (for retention) are those with
+  `prev_stability > 0` — i.e. not a card's first review.
+- `StudyService.stats_service()` builds one sharing the same two connections.
+- `MainWindow` refreshes Dashboard/Review/Stats on screen-change and on
+  `catalog_vm.deck_changed`.
+
+## Settings & theme (Phase 5)
+
+- `services/settings.py` (`AppSettings`/`SettingsStore`) persists to the `setting`
+  table. `StudyService` owns the store, applies `fsrs_retention` to its
+  `FsrsScheduler`, and rebuilds it on `update_settings`.
+- `ui/theme.py`: `apply_theme` (via `QStyleHints.setColorScheme`) and `load_fonts`
+  (registers `assets/fonts/*`, else OS fallback). `assets/fonts/` is gitignored;
+  `scripts/fetch_font.py` populates it.
+- Per-deck limits live on the `deck` row; the Settings screen edits the current deck.
+
+## Vocabulary (Phase 7)
+
+- `scripts/import_jmdict.py` builds a narrow N5 subset; `VocabRepo` + catalog
+  vocab methods; the Browse screen is a Kanji/Vocabulary `QTabWidget`.
+- `StudyService._to_item` renders each card to a `ReviewItem` with plain-text
+  faces (`prompt` / `prompt_note` / `answer` / `answer_note` + optional
+  `stroke`). `CardFace` is subject-agnostic — no card-mode branching in the UI.
+- `add_vocab` mirrors `add_kanji` (both go through `_add_subject`).
+
+## Roadmap status
+
+Phases 0–7 are done. Remaining items live under PLAN.md "Later / optional"
+(Tatoeba sentences, PyInstaller build, handwriting, audio). Widening past N5 is
+just adding `resources/jlpt/n4.txt` etc. and rerunning `scripts.build_db`.

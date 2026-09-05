@@ -148,36 +148,41 @@ README.md
 - **Exit check:** study a mixed recognition/recall session, close, reopen — the same cards come due on schedule ✅
 - `study.db` is a fresh empty file on first run (no copy of `kanji.db` needed — the two databases stay separate)
 
-### Phase 4 — Dashboard & stats (week 5–6)
-- Dashboard: due today, new today, streak, quick "Start studying"
-- Stats: reviews over time, retention %, upcoming due forecast, kanji learned by JLPT
-- **Exit check:** numbers reconcile with `review_log`
+### Phase 4 — Dashboard & stats (week 5–6) ✅
+- `services/stats.py` (`StatsService` + `StatsReport`): reads `review_log` + card states; day-bucketed with the 04:00 boundary
+- Dashboard: Due / New today / Reviewed today / Day-streak tiles + a context-aware "Start studying" button (jumps to Review and starts the session)
+- Stats: retention % (over mature reviews only — first reviews excluded), reviews-per-day bar chart (21 days), coming-due forecast bar chart (14 days), per-JLPT progress bars, card-state breakdown
+- `ui/widgets/bar_chart.py`: tiny QPainter bar chart, no charting dependency
+- `MainWindow` now lands on the Dashboard and refreshes Dashboard/Review/Stats when you switch to them or add a kanji
+- **Exit check:** every number reconciles with `review_log` (covered by `tests/test_stats_service.py`) ✅
 
-### Phase 5 — Polish (week 6–7)
-- Settings screen (per-deck limits, theme, FSRS params, font)
-- Credits/licenses screen
-- Keyboard shortcuts (space = reveal, 1–4 = rate)
-- Light/dark theme, bundled Noto Sans JP
-- `README.md`: `uv sync` then `uv run kanji-app` — one-command setup for you and your friend
-- `study.db` already lives in the per-user data dir (Phase 3); nothing to migrate here
-- **Exit check:** fresh `git clone` → `uv sync` → `uv run kanji-app` works on a clean machine
+### Phase 5 — Polish (week 6–7) ✅
+- `services/settings.py` (`AppSettings` + `SettingsStore`, persisted in the `setting` table)
+- Settings screen: theme (System/Light/Dark), FSRS target retention, per-deck new/review limits
+- `ui/theme.py`: `apply_theme` via `QStyleHints.setColorScheme`; `load_fonts` registers any font in `assets/fonts/` and picks a JP-capable family, else falls back to the OS
+- `scripts/fetch_font.py`: optional download of Noto Sans JP (SIL OFL) — `assets/fonts/` is gitignored (large binary, fetched on demand)
+- Credits/licences dialog (KANJIDIC2, KanjiVG, FSRS, Qt, Noto)
+- Keyboard: Space = reveal, 1–4 = rate (Review); Ctrl+1..5 = screen nav
+- **Exit check:** fresh `git clone` → `uv sync` → `uv run kanji-app` works; theme + retention + limits persist across restarts ✅
 - **This is the usable MVP:** N5 kanji, recognition + recall, one deck, full SRS loop.
 
-### Phase 6 — Multiple decks (week 7–8)
-- Deck list / create / edit / delete UI; per-deck new & review limits
-- "Move/copy card to deck", deck picker when adding a kanji
-- Dashboard and stats become per-deck + "all decks"
-- **Exit check:** two kanji decks schedule independently; limits are per-deck
+### Phase 6 — Multiple decks (week 7–8) ✅
+- `ui/deck_controller.py` (`DeckController`): shared "current deck" state; `current_changed` / `decks_changed` signals
+- Toolbar deck selector; every study view-model gets `set_deck()` and re-targets on change
+- Decks screen (`DecksView` + `DecksViewModel`): list with card counts, create / rename / re-limit / make-current / delete (last-deck guard)
+- Per-deck new/review limits moved here from Settings; Browse "Add" targets the current deck
+- **Exit check:** two decks schedule independently; Dashboard/Review/Stats follow the selector; limits are per-deck ✅
 
-### Phase 7 — Vocabulary (week 8–10)
-- Full JMdict import (or a curated JLPT-tagged subset); `VocabRepo`
-- `vocab_browser_view` + `vocab_detail_view` (expression, kana, glosses, component kanji links)
-- Vocab card creation; `card_widget` renders vocab prompts (word ⇄ meaning/reading)
-- Example sentences from Tatoeba on the detail + review screens
-- Mixed decks allowed
-- **Exit check:** a vocab card and a kanji card review in the same session and schedule correctly
+### Phase 7 — Vocabulary (week 8–10) ✅
+- `scripts/import_jmdict.py`: curated N5 subset (1082 entries — kanji spelling built only from the charset, common-priority, not rare/archaic); `VocabRepo`; `build_db.py` gained a `--jmdict` / `--no-vocab` step
+- Browse screen is now a **Kanji / Vocabulary** tab pair; `VocabBrowserView` + `VocabViewModel` (expression, kana, glosses, component kanji, "Add to deck")
+- `StudyService.add_vocab` (recognition + recall); `ReviewItem` reworked into pre-rendered text faces so `CardFace` is subject-agnostic (kanji and vocab, no mode branching)
+- Mixed decks: any subject type in any deck
+- **Exit check:** kanji and vocab cards review in one session and schedule via the same FSRS path ✅
+- Tatoeba example sentences deferred to "later / optional"
 
 ### Later / optional
+- Tatoeba example sentences on the vocab detail + review screens
 - Frozen/standalone build (PyInstaller) — only if the audience ever grows beyond Python users
 - Handwriting practice: draw on canvas, compare stroke count/order to KanjiVG (no ML needed for a basic version)
 - Audio (pronunciation via bundled TTS or recorded clips)

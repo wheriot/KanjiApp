@@ -99,6 +99,9 @@ class ReviewView(QWidget):
 
     # -- rendering -----------------------------------------------
 
+    def start_session(self) -> None:
+        self._vm.start()
+
     def refresh(self) -> None:
         """Re-read pending counts (e.g. after kanji were added on the Browse tab)."""
         if not self._vm.in_progress:

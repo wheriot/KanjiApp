@@ -90,6 +90,10 @@ class CatalogViewModel(QObject):
             self._drawing = self._catalog.stroke_drawing(kanji_id)
         self.selection_changed.emit()
 
+    def set_deck(self, deck_id: int) -> None:
+        self._deck_id = deck_id
+        self.selection_changed.emit()  # refresh the detail panel's Add button
+
     def add_selected_to_deck(self) -> None:
         if (
             self._study is None

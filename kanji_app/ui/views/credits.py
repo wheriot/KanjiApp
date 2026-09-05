@@ -1,0 +1,50 @@
+"""Attribution and licence information for bundled data and libraries."""
+
+from __future__ import annotations
+
+from PySide6.QtWidgets import QDialog, QDialogButtonBox, QTextBrowser, QVBoxLayout, QWidget
+
+CREDITS_HTML = """
+<h2>Kanji App — credits &amp; licences</h2>
+
+<h3>Kanji dictionary data</h3>
+<p><b>KANJIDIC2</b> — readings, meanings, stroke counts, JLPT and grade data.<br>
+&copy; The Electronic Dictionary Research and Development Group, Monash University.
+Used under <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>.</p>
+
+<h3>Stroke order</h3>
+<p><b>KanjiVG</b> — stroke-order diagrams.<br>
+&copy; Ulrich Apel and the KanjiVG project
+(<a href="https://kanjivg.tagaini.net">kanjivg.tagaini.net</a>).
+Used under <a href="https://creativecommons.org/licenses/by-sa/3.0/">CC BY-SA 3.0</a>.</p>
+
+<h3>Scheduling</h3>
+<p><b>FSRS</b> (Free Spaced Repetition Scheduler) via the <code>fsrs</code> Python
+package, MIT licence.</p>
+
+<h3>Toolkit &amp; fonts</h3>
+<p><b>Qt / PySide6</b> — used under the LGPL v3.<br>
+<b>Noto Sans JP</b> (when bundled) — SIL Open Font License 1.1.</p>
+
+<p style="color:gray">Vocabulary and example-sentence data (JMdict, Tatoeba) will be
+credited here when that feature ships.</p>
+"""
+
+
+class CreditsDialog(QDialog):
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Credits & licences")
+        self.resize(520, 460)
+
+        browser = QTextBrowser()
+        browser.setOpenExternalLinks(True)
+        browser.setHtml(CREDITS_HTML)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.rejected.connect(self.reject)
+        buttons.accepted.connect(self.accept)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(browser)
+        layout.addWidget(buttons)

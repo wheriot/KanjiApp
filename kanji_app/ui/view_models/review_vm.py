@@ -54,6 +54,15 @@ class ReviewViewModel(QObject):
 
     # -- commands -------------------------------------------------
 
+    def set_deck(self, deck_id: int) -> None:
+        """Switch decks, abandoning any session in progress."""
+        self._deck_id = deck_id
+        self._queue = []
+        self._cursor = 0
+        self._revealed = False
+        self._answered = 0
+        self.state_changed.emit()
+
     def start(self, now: datetime | None = None) -> None:
         self._queue = self._study.start_session(self._deck_id, now)
         self._cursor = 0

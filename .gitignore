@@ -24,3 +24,6 @@ Thumbs.db
 
 # Cached source downloads for the data pipeline (see scripts/build_db.py)
 /kanji_app/resources/_cache/
+
+# Optionally-bundled fonts (see scripts/fetch_font.py); large binaries, fetched on demand
+/kanji_app/assets/fonts/

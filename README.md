@@ -37,10 +37,20 @@ Or all at once:
 uv run python scripts/check.py
 ```
 
+## Japanese fonts (optional)
+
+The app uses your OS's Japanese fonts by default (fine on Windows/macOS). To
+bundle Noto Sans JP for identical rendering everywhere:
+
+```
+uv run python -m scripts.fetch_font
+```
+
 ## Data pipeline
 
 The shipped reference database `kanji_app/resources/kanji.db` is built from
-KANJIDIC2 and KanjiVG, scoped to a charset file (`kanji_app/resources/jlpt/n5.txt`):
+KANJIDIC2, KanjiVG and JMdict, scoped to a charset file
+(`kanji_app/resources/jlpt/n5.txt`):
 
 ```
 uv run python -m scripts.build_db          # downloads + caches sources, builds N5 db
@@ -48,20 +58,19 @@ uv run python -m scripts.build_db          # downloads + caches sources, builds 
 
 Widen coverage by adding e.g. `kanji_app/resources/jlpt/n4.txt` and rerunning with
 `--charset ... --jlpt 4`. Individual importers: `scripts.import_kanjidic`,
-`scripts.import_kanjivg`.
+`scripts.import_kanjivg`, `scripts.import_jmdict`. Pass `--no-vocab` to skip JMdict.
 
 ## Project status
 
-Phase 3 — spaced-repetition review loop. Browse and add kanji to your study deck,
-then review recognition + recall cards on the Review screen (FSRS scheduling,
-Again/Hard/Good/Easy). Progress is saved to `study.db` in your per-user data dir.
-See [PLAN.md](PLAN.md) § "Feature roadmap".
+Phases 0–7 complete. Dashboard, Browse (kanji + vocabulary), Review (recognition
++ recall, FSRS), multiple Decks, Stats, and Settings. Ships 103 N5 kanji with
+stroke order and ~1080 N5 vocabulary entries. See [PLAN.md](PLAN.md).
 
 ## Data & licenses
 
-- **KANJIDIC2** — © EDRDG, CC BY-SA 4.0
+- **KANJIDIC2**, **JMdict** — © EDRDG, CC BY-SA 4.0
 - **KanjiVG** — © Ulrich Apel / KanjiVG, CC BY-SA 3.0
-- JMdict / Tatoeba will be added with vocabulary support (Phase 7)
+- **Noto Sans JP** (optional, fetched on demand) — SIL Open Font License 1.1
 
 Attribution is required; the app will ship a Credits screen. See
 [PLAN.md](PLAN.md) § "Data sources".
