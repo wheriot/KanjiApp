@@ -109,6 +109,9 @@ class StudyService:
     def delete_deck(self, deck_id: int) -> None:
         self._decks.delete(deck_id)
 
+    def deck_card_count(self, deck_id: int) -> int:
+        return self._cards.count_for_deck(deck_id)
+
     # -- building a collection --------------------------------------
 
     def is_in_deck(self, deck_id: int, kanji_id: int) -> bool:

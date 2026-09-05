@@ -166,11 +166,12 @@ README.md
 - **Exit check:** fresh `git clone` → `uv sync` → `uv run kanji-app` works; theme + retention + limits persist across restarts ✅
 - **This is the usable MVP:** N5 kanji, recognition + recall, one deck, full SRS loop.
 
-### Phase 6 — Multiple decks (week 7–8)
-- Deck list / create / edit / delete UI; per-deck new & review limits
-- "Move/copy card to deck", deck picker when adding a kanji
-- Dashboard and stats become per-deck + "all decks"
-- **Exit check:** two kanji decks schedule independently; limits are per-deck
+### Phase 6 — Multiple decks (week 7–8) ✅
+- `ui/deck_controller.py` (`DeckController`): shared "current deck" state; `current_changed` / `decks_changed` signals
+- Toolbar deck selector; every study view-model gets `set_deck()` and re-targets on change
+- Decks screen (`DecksView` + `DecksViewModel`): list with card counts, create / rename / re-limit / make-current / delete (last-deck guard)
+- Per-deck new/review limits moved here from Settings; Browse "Add" targets the current deck
+- **Exit check:** two decks schedule independently; Dashboard/Review/Stats follow the selector; limits are per-deck ✅
 
 ### Phase 7 — Vocabulary (week 8–10)
 - Full JMdict import (or a curated JLPT-tagged subset); `VocabRepo`

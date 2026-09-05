@@ -284,6 +284,12 @@ class CardRepo:
         ).fetchall()
         return [self._row(r) for r in rows]
 
+    def count_for_deck(self, deck_id: int) -> int:
+        row = self._conn.execute(
+            "SELECT COUNT(*) FROM card WHERE deck_id = ?", (deck_id,)
+        ).fetchone()
+        return int(row[0])
+
     def get(self, card_id: int) -> Card | None:
         row = self._conn.execute("SELECT * FROM card WHERE id = ?", (card_id,)).fetchone()
         return self._row(row) if row else None

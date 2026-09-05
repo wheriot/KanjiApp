@@ -45,9 +45,13 @@ class DashboardViewModel(QObject):
     def has_work(self) -> bool:
         return self._summary.waiting > 0
 
+    def set_deck(self, deck_id: int) -> None:
+        self._deck_id = deck_id
+        self.refresh()
+
     def refresh(self) -> None:
-        deck = self._study.default_deck()
-        self._deck_name = deck.name
+        deck = self._study.get_deck(self._deck_id)
+        self._deck_name = deck.name if deck else ""
         self._summary = self._study.today_summary(self._deck_id)
         self._streak = self._stats.report(self._deck_id).streak_days
         self.changed.emit()

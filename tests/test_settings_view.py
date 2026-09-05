@@ -9,26 +9,22 @@ from kanji_app.ui.views.settings_view import SettingsView
 
 
 def test_settings_vm_persists_changes(study_service: StudyService) -> None:
-    deck_id = study_service.default_deck().id
-    vm = SettingsViewModel(study_service, deck_id)
+    vm = SettingsViewModel(study_service)
 
     themes: list[str] = []
     vm.theme_changed.connect(themes.append)
     vm.set_theme("dark")
-    vm.set_new_per_day(30)
     vm.set_retention(0.92)
 
     assert themes == ["dark"]
     assert study_service.settings.theme == "dark"
     assert study_service.settings.fsrs_retention == 0.92
-    assert study_service.default_deck().new_per_day == 30
 
 
 def test_settings_view_builds_and_shows_current_values(study_service: StudyService) -> None:
     build_app([])
     study_service.update_settings(AppSettings(theme="light", fsrs_retention=0.88))
-    deck_id = study_service.default_deck().id
-    view = SettingsView(SettingsViewModel(study_service, deck_id))
+    view = SettingsView(SettingsViewModel(study_service))
     assert view._theme.currentData() == "light"
     assert view._retention.value() == 0.88
 

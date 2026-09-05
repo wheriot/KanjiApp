@@ -23,6 +23,10 @@ class StatsViewModel(QObject):
     def report(self) -> StatsReport:
         return self._report
 
+    def set_deck(self, deck_id: int) -> None:
+        self._deck_id = deck_id
+        self.refresh()
+
     def refresh(self) -> None:
         self._report = self._stats.report(self._deck_id)
         self.changed.emit()
