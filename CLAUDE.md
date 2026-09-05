@@ -102,7 +102,17 @@ Run `scripts/check.py` and make it green before considering a change done.
 - `core/review_session.py` is pure; `StudyService` is the stateful orchestrator;
   `ReviewViewModel` tracks cursor + reveal state.
 
+## Stats (Phase 4)
+
+- `services/stats.py` (`StatsService`) reads `review_log` + card states and
+  returns a `StatsReport`. Day bucketing uses `core.review_session.day_start`
+  (04:00 boundary). "Mature" reviews (for retention) are those with
+  `prev_stability > 0` — i.e. not a card's first review.
+- `StudyService.stats_service()` builds one sharing the same two connections.
+- `MainWindow` refreshes Dashboard/Review/Stats on screen-change and on
+  `catalog_vm.deck_changed`.
+
 ## Not yet built
 
-`Dashboard` / `Stats` / `Settings` screens are placeholders (Phases 4–5). Multiple
-decks = Phase 6, vocab = Phase 7. Don't scaffold ahead of the current phase.
+`Settings` screen = Phase 5. Multiple decks = Phase 6, vocab = Phase 7. Don't
+scaffold ahead of the current phase.

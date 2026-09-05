@@ -148,10 +148,13 @@ README.md
 - **Exit check:** study a mixed recognition/recall session, close, reopen — the same cards come due on schedule ✅
 - `study.db` is a fresh empty file on first run (no copy of `kanji.db` needed — the two databases stay separate)
 
-### Phase 4 — Dashboard & stats (week 5–6)
-- Dashboard: due today, new today, streak, quick "Start studying"
-- Stats: reviews over time, retention %, upcoming due forecast, kanji learned by JLPT
-- **Exit check:** numbers reconcile with `review_log`
+### Phase 4 — Dashboard & stats (week 5–6) ✅
+- `services/stats.py` (`StatsService` + `StatsReport`): reads `review_log` + card states; day-bucketed with the 04:00 boundary
+- Dashboard: Due / New today / Reviewed today / Day-streak tiles + a context-aware "Start studying" button (jumps to Review and starts the session)
+- Stats: retention % (over mature reviews only — first reviews excluded), reviews-per-day bar chart (21 days), coming-due forecast bar chart (14 days), per-JLPT progress bars, card-state breakdown
+- `ui/widgets/bar_chart.py`: tiny QPainter bar chart, no charting dependency
+- `MainWindow` now lands on the Dashboard and refreshes Dashboard/Review/Stats when you switch to them or add a kanji
+- **Exit check:** every number reconciles with `review_log` (covered by `tests/test_stats_service.py`) ✅
 
 ### Phase 5 — Polish (week 6–7)
 - Settings screen (per-deck limits, theme, FSRS params, font)

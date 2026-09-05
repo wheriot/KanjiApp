@@ -125,6 +125,21 @@ class KanjiRepo:
         ).fetchall()
         return [int(r["v"]) for r in rows]
 
+    def count_by_jlpt(self) -> dict[int, int]:
+        rows = self._conn.execute(
+            "SELECT jlpt, COUNT(*) AS n FROM kanji WHERE jlpt IS NOT NULL GROUP BY jlpt"
+        ).fetchall()
+        return {int(r["jlpt"]): int(r["n"]) for r in rows}
+
+    def jlpt_by_id(self, ids: Iterable[int]) -> dict[int, int | None]:
+        ids = list(ids)
+        if not ids:
+            return {}
+        rows = self._conn.execute(
+            f"SELECT id, jlpt FROM kanji WHERE id IN ({_marks(ids)})", tuple(ids)
+        ).fetchall()
+        return {int(r["id"]): r["jlpt"] for r in rows}
+
     # -- stroke order -----------------------------------------------------
 
     def stroke_svg(self, kanji_id: int) -> str | None:
@@ -290,6 +305,35 @@ class CardRepo:
             {"id": card_id, **_scheduling_params(scheduling)},
         )
 
+    # -- aggregates (for stats) ------------------------------------
+
+    def state_breakdown(self, deck_id: int) -> dict[CardState, int]:
+        rows = self._conn.execute(
+            "SELECT state, COUNT(*) AS n FROM card WHERE deck_id = ? GROUP BY state",
+            (deck_id,),
+        ).fetchall()
+        return {CardState(r["state"]): int(r["n"]) for r in rows}
+
+    def subject_ids(self, deck_id: int, *, learned_only: bool = False) -> set[int]:
+        """Distinct kanji ids with a card in this deck (optionally past the 'new' stage)."""
+        clause = "AND state != 'new'" if learned_only else ""
+        rows = self._conn.execute(
+            f"SELECT DISTINCT subject_id FROM card "
+            f"WHERE deck_id = ? AND subject_type = 'kanji' {clause}",
+            (deck_id,),
+        ).fetchall()
+        return {int(r["subject_id"]) for r in rows}
+
+    def due_dates_between(self, deck_id: int, start: datetime, end: datetime) -> list[datetime]:
+        rows = self._conn.execute(
+            """
+            SELECT due FROM card
+            WHERE deck_id = ? AND state != 'new' AND due >= ? AND due < ?
+            """,
+            (deck_id, _iso(start), _iso(end)),
+        ).fetchall()
+        return [_dt(r["due"]) for r in rows]
+
     @staticmethod
     def _row(row: sqlite3.Row) -> Card:
         scheduling = SchedulingState(
@@ -367,6 +411,36 @@ class ReviewLogRepo:
             (deck_id, _iso(since)),
         ).fetchone()
         return int(row[0])
+
+    def timestamps_since(self, deck_id: int, since: datetime) -> list[datetime]:
+        rows = self._conn.execute(
+            """
+            SELECT rl.reviewed_at FROM review_log rl
+            JOIN card c ON c.id = rl.card_id
+            WHERE c.deck_id = ? AND rl.reviewed_at >= ?
+            ORDER BY rl.reviewed_at
+            """,
+            (deck_id, _iso(since)),
+        ).fetchall()
+        return [_dt(r["reviewed_at"]) for r in rows]
+
+    def retention_since(self, deck_id: int, since: datetime) -> tuple[int, int]:
+        """(passed, total) over reviews of already-learned cards (prev_stability > 0).
+
+        A review counts as passed when it was not rated "Again".
+        """
+        row = self._conn.execute(
+            """
+            SELECT COUNT(*) AS total,
+                   SUM(CASE WHEN rl.rating != 1 THEN 1 ELSE 0 END) AS passed
+            FROM review_log rl
+            JOIN card c ON c.id = rl.card_id
+            WHERE c.deck_id = ? AND rl.reviewed_at >= ? AND rl.prev_stability > 0
+            """,
+            (deck_id, _iso(since)),
+        ).fetchone()
+        total = int(row["total"])
+        return (int(row["passed"] or 0), total)
 
 
 def _scheduling_params(s: SchedulingState) -> dict[str, object]:

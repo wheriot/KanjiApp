@@ -52,10 +52,10 @@ Widen coverage by adding e.g. `kanji_app/resources/jlpt/n4.txt` and rerunning wi
 
 ## Project status
 
-Phase 3 — spaced-repetition review loop. Browse and add kanji to your study deck,
-then review recognition + recall cards on the Review screen (FSRS scheduling,
-Again/Hard/Good/Easy). Progress is saved to `study.db` in your per-user data dir.
-See [PLAN.md](PLAN.md) § "Feature roadmap".
+Phase 4 — dashboard & stats. On top of the Phase 3 review loop: a Dashboard with
+today's workload and a one-click "Start studying", and a Stats screen (retention,
+reviews-per-day, coming-due forecast, JLPT progress). See [PLAN.md](PLAN.md)
+§ "Feature roadmap".
 
 ## Data & licenses
 

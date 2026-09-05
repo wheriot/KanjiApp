@@ -23,6 +23,7 @@ from kanji_app.core.review_session import DeckCounts
 from kanji_app.core.srs import FsrsScheduler, Scheduler
 from kanji_app.data import db
 from kanji_app.data.repositories import CardRepo, DeckRepo, KanjiRepo, ReviewLogRepo
+from kanji_app.services.stats import StatsService
 
 _STUDY_MODES = (CardMode.RECOGNITION, CardMode.RECALL)
 
@@ -33,6 +34,19 @@ class ReviewItem:
 
     card: Card
     kanji: Kanji
+
+
+@dataclass(frozen=True, slots=True)
+class TodaySummary:
+    """What the dashboard shows: work waiting and work already done today."""
+
+    due: int
+    new_available: int
+    reviewed_today: int
+
+    @property
+    def waiting(self) -> int:
+        return self.due + self.new_available
 
 
 class StudyService:
@@ -88,6 +102,20 @@ class StudyService:
         moment = now or datetime.now(UTC)
         return review_session.counts(self._cards.for_deck(deck_id), moment)
 
+    def today_summary(self, deck_id: int, now: datetime | None = None) -> TodaySummary:
+        moment = now or datetime.now(UTC)
+        deck = self._decks.get(deck_id)
+        raw = review_session.counts(self._cards.for_deck(deck_id), moment)
+        if deck is None:
+            return TodaySummary(due=raw.due, new_available=raw.new, reviewed_today=0)
+        since = review_session.day_start(moment)
+        new_done = self._log.count_new_since(deck_id, since)
+        return TodaySummary(
+            due=raw.due,
+            new_available=max(0, min(raw.new, deck.new_per_day - new_done)),
+            reviewed_today=self._log.count_since(deck_id, since),
+        )
+
     def start_session(self, deck_id: int, now: datetime | None = None) -> list[ReviewItem]:
         moment = now or datetime.now(UTC)
         deck = self._decks.get(deck_id)
@@ -122,6 +150,10 @@ class StudyService:
             return None
         kanji = self._kanji.get(card.subject_id)
         return ReviewItem(card=card, kanji=kanji) if kanji else None
+
+    def stats_service(self) -> StatsService:
+        """A :class:`StatsService` sharing this service's two connections."""
+        return StatsService(self._study, self._reference)
 
     def close(self) -> None:
         self._study.close()
