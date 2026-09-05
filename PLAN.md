@@ -186,6 +186,10 @@ README.md
 - `build_db.py` now defaults to `joyo.txt` and applies whichever `n{1..5}.txt` exist; vocab inherits its hardest kanji's level; `--jlpt` flag removed
 - Shipped `kanji.db` grew to ~13 MB: 2136 kanji + stroke SVGs + ~15k vocab. Browse filters by grade (1–6, 8) and JLPT (N1/N2/N4/N5); `find`/`browse` limit raised to 5000
 
+### Post-roadmap — bulk add ✅
+- `StudyService.add_kanji_bulk` / `add_vocab_bulk` (one transaction; skip subjects already in the deck)
+- `AddAllButton` on both Browse tabs: adds every kanji/word matching the current filters + search to the current deck, with a confirmation dialog (e.g. filter to Grade 3 → "Add all 200")
+
 ### Later / optional
 - Tatoeba example sentences on the vocab detail + review screens
 - Frozen/standalone build (PyInstaller) — only if the audience ever grows beyond Python users

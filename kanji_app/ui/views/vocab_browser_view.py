@@ -5,6 +5,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QFormLayout,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
     QListWidget,
@@ -16,6 +17,7 @@ from PySide6.QtWidgets import (
 )
 
 from kanji_app.ui.view_models.vocab_vm import VocabViewModel
+from kanji_app.ui.views.bulk_add import AddAllButton
 
 _ID_ROLE = Qt.ItemDataRole.UserRole
 
@@ -33,12 +35,23 @@ class VocabBrowserView(QWidget):
         self._list = QListWidget()
         self._list.currentItemChanged.connect(self._on_current_item)
         self._count = QLabel()
+        self._add_all = AddAllButton(
+            "words",
+            pending=self._vm.not_in_deck_count,
+            add=self._vm.add_all_results_to_deck,
+            can_add=lambda: self._vm.can_add_to_deck,
+        )
+
+        count_row = QHBoxLayout()
+        count_row.addWidget(self._count)
+        count_row.addStretch(1)
+        count_row.addWidget(self._add_all)
 
         left = QWidget()
         left_layout = QVBoxLayout(left)
         left_layout.addWidget(self._search)
         left_layout.addWidget(self._list, stretch=1)
-        left_layout.addWidget(self._count)
+        left_layout.addLayout(count_row)
 
         self._expression = QLabel()
         expr_font = self._expression.font()
@@ -95,11 +108,13 @@ class VocabBrowserView(QWidget):
             self._list.addItem(item)
         self._list.blockSignals(False)
         self._count.setText(f"{len(self._vm.results)} words")
+        self._add_all.refresh()
 
     def _reload_detail(self) -> None:
         vocab = self._vm.selected
         self._detail.setVisible(vocab is not None)
         self._placeholder.setVisible(vocab is None)
+        self._add_all.refresh()
         if vocab is None:
             return
         self._expression.setText(vocab.expression)

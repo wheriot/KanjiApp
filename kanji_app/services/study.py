@@ -146,6 +146,16 @@ class StudyService:
     def add_vocab(self, deck_id: int, vocab_id: int, now: datetime | None = None) -> int:
         return self._add_subject(deck_id, SubjectType.VOCAB, vocab_id, now)
 
+    def add_kanji_bulk(
+        self, deck_id: int, kanji_ids: list[int], now: datetime | None = None
+    ) -> int:
+        return self._add_subjects_bulk(deck_id, SubjectType.KANJI, kanji_ids, now)
+
+    def add_vocab_bulk(
+        self, deck_id: int, vocab_ids: list[int], now: datetime | None = None
+    ) -> int:
+        return self._add_subjects_bulk(deck_id, SubjectType.VOCAB, vocab_ids, now)
+
     def _subject_in_deck(self, deck_id: int, subject_type: SubjectType, subject_id: int) -> bool:
         modes = self._cards.modes_for_subject(deck_id, subject_type, subject_id)
         return set(_STUDY_MODES).issubset(modes)
@@ -154,16 +164,37 @@ class StudyService:
         self, deck_id: int, subject_type: SubjectType, subject_id: int, now: datetime | None
     ) -> int:
         """Create the recognition + recall cards for a subject. Returns cards added."""
+        with db.transaction(self._study):
+            return self._create_missing_cards(
+                deck_id, subject_type, subject_id, now or datetime.now(UTC)
+            )
+
+    def _add_subjects_bulk(
+        self,
+        deck_id: int,
+        subject_type: SubjectType,
+        subject_ids: list[int],
+        now: datetime | None,
+    ) -> int:
+        """Add many subjects in one transaction. Returns total cards added."""
         moment = now or datetime.now(UTC)
-        existing = self._cards.modes_for_subject(deck_id, subject_type, subject_id)
         added = 0
         with db.transaction(self._study):
-            for mode in _STUDY_MODES:
-                if mode not in existing:
-                    self._cards.create(
-                        deck_id, subject_type, subject_id, mode, self._scheduler.new_state(moment)
-                    )
-                    added += 1
+            for subject_id in subject_ids:
+                added += self._create_missing_cards(deck_id, subject_type, subject_id, moment)
+        return added
+
+    def _create_missing_cards(
+        self, deck_id: int, subject_type: SubjectType, subject_id: int, moment: datetime
+    ) -> int:
+        existing = self._cards.modes_for_subject(deck_id, subject_type, subject_id)
+        added = 0
+        for mode in _STUDY_MODES:
+            if mode not in existing:
+                self._cards.create(
+                    deck_id, subject_type, subject_id, mode, self._scheduler.new_state(moment)
+                )
+                added += 1
         return added
 
     # -- reviewing -------------------------------------------------

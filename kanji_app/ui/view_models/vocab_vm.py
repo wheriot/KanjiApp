@@ -76,6 +76,24 @@ class VocabViewModel(QObject):
         self.deck_changed.emit()
         self.selection_changed.emit()
 
+    def not_in_deck_count(self) -> int:
+        if self._study is None or self._deck_id is None:
+            return 0
+        return sum(
+            1 for v in self._results if not self._study.is_vocab_in_deck(self._deck_id, v.id)
+        )
+
+    def add_all_results_to_deck(self) -> int:
+        if self._study is None or self._deck_id is None:
+            return 0
+        ids = [v.id for v in self._results if not self._study.is_vocab_in_deck(self._deck_id, v.id)]
+        if not ids:
+            return 0
+        self._study.add_vocab_bulk(self._deck_id, ids)
+        self.deck_changed.emit()
+        self.selection_changed.emit()
+        return len(ids)
+
     def refresh(self) -> None:
         self._results = self._catalog.browse_vocab(self._text)
         self.results_changed.emit()
