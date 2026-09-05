@@ -3,6 +3,7 @@ from __future__ import annotations
 import sqlite3
 
 import pytest
+
 from kanji_app.data import db
 
 

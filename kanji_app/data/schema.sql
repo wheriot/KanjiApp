@@ -18,10 +18,20 @@ CREATE TABLE IF NOT EXISTS kanji (
     id           INTEGER PRIMARY KEY,
     literal      TEXT    NOT NULL UNIQUE,
     stroke_count INTEGER NOT NULL,
-    grade        INTEGER,
-    jlpt         INTEGER,
-    frequency    INTEGER,
+    grade        INTEGER,          -- Jouyou grade (1-6, 8, 9, 10) from KANJIDIC2
+    jlpt         INTEGER,          -- modern JLPT level (5=N5 .. 1=N1), from resources/jlpt/*.txt
+    jlpt_old     INTEGER,          -- legacy pre-2010 JLPT level in KANJIDIC2 (4=easiest); reference only
+    frequency    INTEGER,          -- newspaper frequency rank (1 = most common), if in the top ~2500
     radical      TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_kanji_jlpt ON kanji(jlpt);
+CREATE INDEX IF NOT EXISTS idx_kanji_grade ON kanji(grade);
+
+-- KanjiVG stroke-order data: one SVG document per kanji (CC BY-SA 3.0, KanjiVG).
+CREATE TABLE IF NOT EXISTS kanjivg (
+    kanji_id     INTEGER PRIMARY KEY REFERENCES kanji(id) ON DELETE CASCADE,
+    stroke_count INTEGER NOT NULL,
+    svg          TEXT    NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS reading (

@@ -55,6 +55,7 @@ uv sync                              # install
 uv run kanji-app                     # run the app
 uv run python scripts/check.py       # ruff + ruff format + mypy + pytest
 uv run pytest                        # tests only
+uv run python -m scripts.build_db    # rebuild kanji_app/resources/kanji.db
 ```
 
 Run `scripts/check.py` and make it green before considering a change done.
@@ -66,8 +67,42 @@ Run `scripts/check.py` and make it green before considering a change done.
 - `ui/`: light smoke tests only (constructs, signals) — don't over-invest.
 - Every behavioural change lands with a test.
 
+## Data pipeline (`scripts/`, dev-only, not shipped)
+
+- `scripts/build_db.py` orchestrates; `import_kanjidic.py` / `import_kanjivg.py`
+  do the work; `_common.py` has shared helpers.
+- Run as modules: `uv run python -m scripts.build_db`.
+- The pipeline is scoped to a **charset file** (`resources/jlpt/n5.txt`) — one
+  kanji per line, `#` comments allowed. Add more list files to widen coverage.
+- Sources are cached under `resources/_cache/` (gitignored). `kanji.db` itself
+  IS committed.
+- Importer tests seed the DB with SQL fixtures (`kanji_db` fixture); they don't
+  run the network importers, except `test_import_kanjidic.py` which parses a
+  small inline XML sample.
+
+## UI wiring (as of Phase 2)
+
+- `ui/app.py` builds a `KanjiCatalog` from the bundled `kanji.db` and hands it to
+  `MainWindow`, which owns the screen stack and closes the catalog on exit.
+- Browse screen: `BrowserView` ← `CatalogViewModel` ← `KanjiCatalog` (service).
+  Views never import `data`; the view-model exposes plain properties + two Qt
+  signals (`results_changed`, `selection_changed`).
+- `StrokeOrderWidget` renders SVG from `core/kanjivg.render()` through a
+  `QSvgRenderer` — no font dependency. `_Canvas.paintEvent` does the drawing.
+- Tests: services/view-models use the `kanji_db` SQL fixture; widget/view tests
+  call `build_app([])` first (Qt runs `offscreen`, set in `conftest.py`).
+
+## Study data (Phase 3)
+
+- Two databases: the **reference** `kanji.db` (bundled, read-only use) and the
+  **study** `study.db` (per-user data dir, writable — decks/cards/review_log).
+  `StudyService` holds one connection to each. They never join.
+- All datetimes are UTC ISO strings in SQLite; `_iso` / `_dt` in `repositories.py`.
+- Daily new/review tallies are derived from `review_log`, not counters.
+- `core/review_session.py` is pure; `StudyService` is the stateful orchestrator;
+  `ReviewViewModel` tracks cursor + reveal state.
+
 ## Not yet built
 
-`services/`, `ui/view_models/`, most of `ui/`, the data importers, and
-`data/repositories.py` are stubs or empty. Build them phase by phase per
-PLAN.md — don't scaffold ahead of the current phase.
+`Dashboard` / `Stats` / `Settings` screens are placeholders (Phases 4–5). Multiple
+decks = Phase 6, vocab = Phase 7. Don't scaffold ahead of the current phase.

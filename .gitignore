@@ -21,3 +21,6 @@ Thumbs.db
 *.db-wal
 *.db-shm
 /scratch/
+
+# Cached source downloads for the data pipeline (see scripts/build_db.py)
+/kanji_app/resources/_cache/
