@@ -122,7 +122,17 @@ Run `scripts/check.py` and make it green before considering a change done.
   `scripts/fetch_font.py` populates it.
 - Per-deck limits live on the `deck` row; the Settings screen edits the current deck.
 
-## Not yet built
+## Vocabulary (Phase 7)
 
-Multiple decks = Phase 6, vocab = Phase 7. Don't scaffold ahead of the current
-phase.
+- `scripts/import_jmdict.py` builds a narrow N5 subset; `VocabRepo` + catalog
+  vocab methods; the Browse screen is a Kanji/Vocabulary `QTabWidget`.
+- `StudyService._to_item` renders each card to a `ReviewItem` with plain-text
+  faces (`prompt` / `prompt_note` / `answer` / `answer_note` + optional
+  `stroke`). `CardFace` is subject-agnostic — no card-mode branching in the UI.
+- `add_vocab` mirrors `add_kanji` (both go through `_add_subject`).
+
+## Roadmap status
+
+Phases 0–7 are done. Remaining items live under PLAN.md "Later / optional"
+(Tatoeba sentences, PyInstaller build, handwriting, audio). Widening past N5 is
+just adding `resources/jlpt/n4.txt` etc. and rerunning `scripts.build_db`.

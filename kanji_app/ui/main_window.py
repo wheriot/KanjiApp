@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
     QStackedWidget,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -30,12 +31,14 @@ from kanji_app.ui.view_models.decks_vm import DecksViewModel
 from kanji_app.ui.view_models.review_vm import ReviewViewModel
 from kanji_app.ui.view_models.settings_vm import SettingsViewModel
 from kanji_app.ui.view_models.stats_vm import StatsViewModel
+from kanji_app.ui.view_models.vocab_vm import VocabViewModel
 from kanji_app.ui.views.browser_view import BrowserView
 from kanji_app.ui.views.dashboard_view import DashboardView
 from kanji_app.ui.views.decks_view import DecksView
 from kanji_app.ui.views.review_view import ReviewView
 from kanji_app.ui.views.settings_view import SettingsView
 from kanji_app.ui.views.stats_view import StatsView
+from kanji_app.ui.views.vocab_browser_view import VocabBrowserView
 
 SCREENS = ("Dashboard", "Review", "Browse", "Decks", "Stats", "Settings")
 
@@ -57,6 +60,7 @@ class MainWindow(QMainWindow):
         self._decks_view: DecksView | None = None
         self._settings_vm: SettingsViewModel | None = None
         self._catalog_vm: CatalogViewModel | None = None
+        self._vocab_vm: VocabViewModel | None = None
         self._deck_view_models: list[DashboardViewModel | ReviewViewModel | StatsViewModel] = []
         self._deck_selector: QComboBox | None = None
 
@@ -105,7 +109,12 @@ class MainWindow(QMainWindow):
             return self._review
         if name == "Browse" and self._catalog is not None:
             self._catalog_vm = CatalogViewModel(self._catalog, self._study, deck_id)
-            return BrowserView(self._catalog_vm)
+            tabs = QTabWidget()
+            tabs.addTab(BrowserView(self._catalog_vm), "Kanji")
+            if self._catalog.vocab_total() > 0:
+                self._vocab_vm = VocabViewModel(self._catalog, self._study, deck_id)
+                tabs.addTab(VocabBrowserView(self._vocab_vm), "Vocabulary")
+            return tabs
         if name == "Decks" and self._decks is not None:
             self._decks_view = DecksView(DecksViewModel(self._decks))
             return self._decks_view
@@ -142,6 +151,8 @@ class MainWindow(QMainWindow):
             self._dashboard.study_requested.connect(self._start_studying)
         if self._catalog_vm is not None:
             self._catalog_vm.deck_changed.connect(self._refresh_study_screens)
+        if self._vocab_vm is not None:
+            self._vocab_vm.deck_changed.connect(self._refresh_study_screens)
         if self._settings_vm is not None:
             self._settings_vm.theme_changed.connect(self._apply_theme)
         if self._decks is not None:
@@ -160,6 +171,8 @@ class MainWindow(QMainWindow):
             vm.set_deck(deck_id)
         if self._catalog_vm is not None:
             self._catalog_vm.set_deck(deck_id)
+        if self._vocab_vm is not None:
+            self._vocab_vm.set_deck(deck_id)
         self._reload_deck_selector()
 
     def _refresh_study_screens(self) -> None:

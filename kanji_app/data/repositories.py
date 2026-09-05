@@ -24,6 +24,7 @@ from kanji_app.core.models import (
     ReadingType,
     SchedulingState,
     SubjectType,
+    Vocab,
 )
 from kanji_app.core.srs import ReviewResult
 
@@ -199,6 +200,83 @@ class KanjiRepo:
 
 def _marks(items: Iterable[object]) -> str:
     return ", ".join("?" for _ in items)
+
+
+class VocabRepo:
+    """Read access to the reference vocabulary list."""
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self._conn = conn
+
+    def get(self, vocab_id: int) -> Vocab | None:
+        row = self._conn.execute("SELECT * FROM vocab WHERE id = ?", (vocab_id,)).fetchone()
+        return self._hydrate([row])[0] if row else None
+
+    def find(self, text: str = "", limit: int = 500) -> list[Vocab]:
+        text = text.strip()
+        if text:
+            like = f"%{text}%"
+            rows = self._conn.execute(
+                """
+                SELECT DISTINCT v.* FROM vocab v
+                LEFT JOIN vocab_gloss g ON g.vocab_id = v.id
+                WHERE v.expression LIKE :like OR v.kana LIKE :like OR g.value LIKE :like
+                ORDER BY length(v.expression), v.expression
+                LIMIT :limit
+                """,
+                {"like": like, "limit": limit},
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT * FROM vocab ORDER BY length(expression), expression LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return self._hydrate(rows)
+
+    def for_kanji(self, kanji_id: int, limit: int = 30) -> list[Vocab]:
+        rows = self._conn.execute(
+            """
+            SELECT v.* FROM vocab v
+            JOIN vocab_kanji vk ON vk.vocab_id = v.id
+            WHERE vk.kanji_id = ?
+            ORDER BY length(v.expression), v.expression
+            LIMIT ?
+            """,
+            (kanji_id, limit),
+        ).fetchall()
+        return self._hydrate(rows)
+
+    def count(self) -> int:
+        return int(self._conn.execute("SELECT COUNT(*) FROM vocab").fetchone()[0])
+
+    def _hydrate(self, rows: Sequence[sqlite3.Row]) -> list[Vocab]:
+        rows = [r for r in rows if r is not None]
+        if not rows:
+            return []
+        ids = [r["id"] for r in rows]
+        glosses: dict[int, list[str]] = defaultdict(list)
+        for g in self._conn.execute(
+            f"SELECT vocab_id, value FROM vocab_gloss WHERE vocab_id IN ({_marks(ids)})",
+            tuple(ids),
+        ):
+            glosses[g["vocab_id"]].append(g["value"])
+        links: dict[int, list[int]] = defaultdict(list)
+        for link in self._conn.execute(
+            f"SELECT vocab_id, kanji_id FROM vocab_kanji WHERE vocab_id IN ({_marks(ids)})",
+            tuple(ids),
+        ):
+            links[link["vocab_id"]].append(link["kanji_id"])
+        return [
+            Vocab(
+                id=r["id"],
+                expression=r["expression"],
+                kana=r["kana"],
+                jlpt=r["jlpt"],
+                glosses=tuple(glosses.get(r["id"], ())),
+                kanji_ids=tuple(links.get(r["id"], ())),
+            )
+            for r in rows
+        ]
 
 
 class DeckRepo:

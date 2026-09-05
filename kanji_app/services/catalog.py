@@ -12,9 +12,9 @@ from dataclasses import dataclass
 from kanji_app.config import BUNDLED_DB
 from kanji_app.core.kanjivg import StrokeDrawing
 from kanji_app.core.kanjivg import parse as parse_kanjivg
-from kanji_app.core.models import Kanji
+from kanji_app.core.models import Kanji, Vocab
 from kanji_app.data import db
-from kanji_app.data.repositories import KanjiRepo
+from kanji_app.data.repositories import KanjiRepo, VocabRepo
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,6 +40,9 @@ class KanjiCatalog:
     def __init__(self, conn: sqlite3.Connection) -> None:
         self._conn = conn
         self._repo = KanjiRepo(conn)
+        self._vocab = VocabRepo(conn)
+
+    # -- kanji -------------------------------------------------------
 
     def browse(self, flt: KanjiFilter, limit: int = 500) -> list[Kanji]:
         return self._repo.find(
@@ -66,6 +69,20 @@ class KanjiCatalog:
 
     def total(self) -> int:
         return self._repo.count()
+
+    # -- vocab ------------------------------------------------------
+
+    def browse_vocab(self, text: str = "", limit: int = 500) -> list[Vocab]:
+        return self._vocab.find(text=text, limit=limit)
+
+    def get_vocab(self, vocab_id: int) -> Vocab | None:
+        return self._vocab.get(vocab_id)
+
+    def vocab_for_kanji(self, kanji_id: int) -> list[Vocab]:
+        return self._vocab.for_kanji(kanji_id)
+
+    def vocab_total(self) -> int:
+        return self._vocab.count()
 
     def close(self) -> None:
         self._conn.close()

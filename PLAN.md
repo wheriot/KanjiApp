@@ -173,15 +173,16 @@ README.md
 - Per-deck new/review limits moved here from Settings; Browse "Add" targets the current deck
 - **Exit check:** two decks schedule independently; Dashboard/Review/Stats follow the selector; limits are per-deck ✅
 
-### Phase 7 — Vocabulary (week 8–10)
-- Full JMdict import (or a curated JLPT-tagged subset); `VocabRepo`
-- `vocab_browser_view` + `vocab_detail_view` (expression, kana, glosses, component kanji links)
-- Vocab card creation; `card_widget` renders vocab prompts (word ⇄ meaning/reading)
-- Example sentences from Tatoeba on the detail + review screens
-- Mixed decks allowed
-- **Exit check:** a vocab card and a kanji card review in the same session and schedule correctly
+### Phase 7 — Vocabulary (week 8–10) ✅
+- `scripts/import_jmdict.py`: curated N5 subset (1082 entries — kanji spelling built only from the charset, common-priority, not rare/archaic); `VocabRepo`; `build_db.py` gained a `--jmdict` / `--no-vocab` step
+- Browse screen is now a **Kanji / Vocabulary** tab pair; `VocabBrowserView` + `VocabViewModel` (expression, kana, glosses, component kanji, "Add to deck")
+- `StudyService.add_vocab` (recognition + recall); `ReviewItem` reworked into pre-rendered text faces so `CardFace` is subject-agnostic (kanji and vocab, no mode branching)
+- Mixed decks: any subject type in any deck
+- **Exit check:** kanji and vocab cards review in one session and schedule via the same FSRS path ✅
+- Tatoeba example sentences deferred to "later / optional"
 
 ### Later / optional
+- Tatoeba example sentences on the vocab detail + review screens
 - Frozen/standalone build (PyInstaller) — only if the audience ever grows beyond Python users
 - Handwriting practice: draw on canvas, compare stroke count/order to KanjiVG (no ML needed for a basic version)
 - Audio (pronunciation via bundled TTS or recorded clips)
