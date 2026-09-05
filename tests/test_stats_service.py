@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 from kanji_app.core.models import Rating
+from kanji_app.data.repositories import KanjiRepo
 from kanji_app.services.study import StudyService
 
 NOON = datetime(2026, 6, 15, 12, 0, tzinfo=UTC)
@@ -78,16 +79,16 @@ def test_retention_ignores_first_reviews(study_service: StudyService) -> None:
     assert report.retention == 1.0
 
 
-def test_jlpt_progress(study_service: StudyService) -> None:
+def test_jlpt_progress(study_service: StudyService, reference_repo: KanjiRepo) -> None:
     deck = study_service.default_deck()
     stats = study_service.stats_service()
-    study_service.add_kanji(deck.id, 1, NOON)  # in deck, still new
-    study_service.add_kanji(deck.id, 2, NOON)
+    n5_ids = [k.id for k in reference_repo.find(jlpt=5)[:2]]
+    study_service.add_kanji(deck.id, n5_ids[0], NOON)  # in deck, still new
+    study_service.add_kanji(deck.id, n5_ids[1], NOON)
     item = study_service.start_session(deck.id, NOON)[0]
-    study_service.answer(item.card, Rating.GOOD, NOON)  # kanji 1 now learning
+    study_service.answer(item.card, Rating.GOOD, NOON)  # one N5 kanji now learning
 
-    (n5,) = stats.report(deck.id, NOON).jlpt
-    assert n5.level == 5
+    n5 = next(row for row in stats.report(deck.id, NOON).jlpt if row.level == 5)
     assert n5.total == 103
     assert n5.in_deck == 2
     assert n5.learned == 1

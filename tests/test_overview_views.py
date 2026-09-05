@@ -53,7 +53,7 @@ def test_stats_view_renders_after_reviews(study_service: StudyService) -> None:
 
     view = StatsView(StatsViewModel(study_service.stats_service(), deck_id))
     assert "cards" in view._headline.text()
-    assert view._jlpt_box.count() == 1  # one N-level row
+    assert view._jlpt_box.count() == len(view._vm.report.jlpt)  # one row per JLPT level
     view.refresh()  # no crash on repeat
 
 

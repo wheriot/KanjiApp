@@ -49,22 +49,26 @@ uv run python -m scripts.fetch_font
 ## Data pipeline
 
 The shipped reference database `kanji_app/resources/kanji.db` is built from
-KANJIDIC2, KanjiVG and JMdict, scoped to a charset file
-(`kanji_app/resources/jlpt/n5.txt`):
+KANJIDIC2, KanjiVG and JMdict, scoped to a **charset file**:
 
 ```
-uv run python -m scripts.build_db          # downloads + caches sources, builds N5 db
+uv run python -m scripts.make_charsets     # regenerate jlpt/joyo.txt + n1/n2/n4.txt
+uv run python -m scripts.build_db          # downloads + caches sources, builds the db
 ```
 
-Widen coverage by adding e.g. `kanji_app/resources/jlpt/n4.txt` and rerunning with
-`--charset ... --jlpt 4`. Individual importers: `scripts.import_kanjidic`,
-`scripts.import_kanjivg`, `scripts.import_jmdict`. Pass `--no-vocab` to skip JMdict.
+`build_db` defaults to `jlpt/joyo.txt` (all 2136 Jōyō kanji) and tags kanji from
+whichever `jlpt/n{1..5}.txt` files exist (`n5.txt` is hand-curated; the rest are
+approximate, derived from KANJIDIC2's legacy JLPT levels — the old data predates
+N3, so there is no `n3.txt`). Narrow the build with `--charset jlpt/n5.txt`.
+Individual importers: `scripts.import_kanjidic`, `scripts.import_kanjivg`,
+`scripts.import_jmdict`. Pass `--no-vocab` to skip JMdict.
 
 ## Project status
 
 Phases 0–7 complete. Dashboard, Browse (kanji + vocabulary), Review (recognition
-+ recall, FSRS), multiple Decks, Stats, and Settings. Ships 103 N5 kanji with
-stroke order and ~1080 N5 vocabulary entries. See [PLAN.md](PLAN.md).
++ recall, FSRS), multiple Decks, Stats, and Settings. Ships all **2136 Jōyō
+kanji** with stroke order and ~15k vocabulary entries, filterable by school grade
+and (approximate) JLPT level. See [PLAN.md](PLAN.md).
 
 ## Data & licenses
 

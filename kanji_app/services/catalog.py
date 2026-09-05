@@ -44,7 +44,7 @@ class KanjiCatalog:
 
     # -- kanji -------------------------------------------------------
 
-    def browse(self, flt: KanjiFilter, limit: int = 500) -> list[Kanji]:
+    def browse(self, flt: KanjiFilter, limit: int = 5000) -> list[Kanji]:
         return self._repo.find(
             text=flt.text,
             jlpt=flt.jlpt,
@@ -72,7 +72,7 @@ class KanjiCatalog:
 
     # -- vocab ------------------------------------------------------
 
-    def browse_vocab(self, text: str = "", limit: int = 500) -> list[Vocab]:
+    def browse_vocab(self, text: str = "", limit: int = 2000) -> list[Vocab]:
         return self._vocab.find(text=text, limit=limit)
 
     def get_vocab(self, vocab_id: int) -> Vocab | None:
