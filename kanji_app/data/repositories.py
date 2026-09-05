@@ -228,6 +228,37 @@ class DeckRepo:
         existing = self.all()
         return existing[0] if existing else self.create("My N5 Kanji")
 
+    def update(
+        self,
+        deck_id: int,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        new_per_day: int | None = None,
+        reviews_per_day: int | None = None,
+    ) -> Deck:
+        current = self.get(deck_id)
+        assert current is not None
+        self._conn.execute(
+            """
+            UPDATE deck SET name = ?, description = ?, new_per_day = ?, reviews_per_day = ?
+            WHERE id = ?
+            """,
+            (
+                name if name is not None else current.name,
+                description if description is not None else current.description,
+                new_per_day if new_per_day is not None else current.new_per_day,
+                reviews_per_day if reviews_per_day is not None else current.reviews_per_day,
+                deck_id,
+            ),
+        )
+        updated = self.get(deck_id)
+        assert updated is not None
+        return updated
+
+    def delete(self, deck_id: int) -> None:
+        self._conn.execute("DELETE FROM deck WHERE id = ?", (deck_id,))
+
     @staticmethod
     def _row(row: sqlite3.Row) -> Deck:
         return Deck(
@@ -441,6 +472,27 @@ class ReviewLogRepo:
         ).fetchone()
         total = int(row["total"])
         return (int(row["passed"] or 0), total)
+
+
+class SettingsRepo:
+    """The ``setting`` key/value table in the study database."""
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self._conn = conn
+
+    def get(self, key: str) -> str | None:
+        row = self._conn.execute("SELECT value FROM setting WHERE key = ?", (key,)).fetchone()
+        return row["value"] if row else None
+
+    def set(self, key: str, value: str) -> None:
+        self._conn.execute(
+            "INSERT INTO setting (key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (key, value),
+        )
+
+    def all(self) -> dict[str, str]:
+        return {r["key"]: r["value"] for r in self._conn.execute("SELECT key, value FROM setting")}
 
 
 def _scheduling_params(s: SchedulingState) -> dict[str, object]:

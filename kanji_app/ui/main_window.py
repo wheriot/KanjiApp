@@ -8,8 +8,9 @@ from __future__ import annotations
 from functools import partial
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QCloseEvent
+from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
+    QApplication,
     QLabel,
     QMainWindow,
     QStackedWidget,
@@ -20,13 +21,16 @@ from PySide6.QtWidgets import (
 from kanji_app import __version__
 from kanji_app.services.catalog import KanjiCatalog
 from kanji_app.services.study import StudyService
+from kanji_app.ui.theme import apply_theme
 from kanji_app.ui.view_models.catalog_vm import CatalogViewModel
 from kanji_app.ui.view_models.dashboard_vm import DashboardViewModel
 from kanji_app.ui.view_models.review_vm import ReviewViewModel
+from kanji_app.ui.view_models.settings_vm import SettingsViewModel
 from kanji_app.ui.view_models.stats_vm import StatsViewModel
 from kanji_app.ui.views.browser_view import BrowserView
 from kanji_app.ui.views.dashboard_view import DashboardView
 from kanji_app.ui.views.review_view import ReviewView
+from kanji_app.ui.views.settings_view import SettingsView
 from kanji_app.ui.views.stats_view import StatsView
 
 SCREENS = ("Dashboard", "Review", "Browse", "Stats", "Settings")
@@ -47,6 +51,7 @@ class MainWindow(QMainWindow):
         self._dashboard: DashboardView | None = None
         self._review: ReviewView | None = None
         self._stats_view: StatsView | None = None
+        self._settings_vm: SettingsViewModel | None = None
         self._catalog_vm: CatalogViewModel | None = None
 
         self.setWindowTitle("Kanji App")
@@ -62,6 +67,11 @@ class MainWindow(QMainWindow):
         nav.setMovable(False)
         for index, name in enumerate(SCREENS):
             nav.addAction(name, partial(self._stack.setCurrentIndex, index))
+            QShortcut(
+                QKeySequence(f"Ctrl+{index + 1}"),
+                self,
+                partial(self._stack.setCurrentIndex, index),
+            )
 
         self._wire()
         self.statusBar().showMessage(f"Kanji App v{__version__}")
@@ -96,6 +106,9 @@ class MainWindow(QMainWindow):
         if name == "Stats" and self._stats is not None and self._deck_id is not None:
             self._stats_view = StatsView(StatsViewModel(self._stats, self._deck_id))
             return self._stats_view
+        if name == "Settings" and self._study is not None and self._deck_id is not None:
+            self._settings_vm = SettingsViewModel(self._study, self._deck_id)
+            return SettingsView(self._settings_vm)
         return _placeholder(name)
 
     def _wire(self) -> None:
@@ -103,6 +116,14 @@ class MainWindow(QMainWindow):
             self._dashboard.study_requested.connect(self._start_studying)
         if self._catalog_vm is not None:
             self._catalog_vm.deck_changed.connect(self._refresh_study_screens)
+        if self._settings_vm is not None:
+            self._settings_vm.theme_changed.connect(self._apply_theme)
+            self._settings_vm.changed.connect(self._refresh_study_screens)
+
+    def _apply_theme(self, theme: str) -> None:
+        app = QApplication.instance()
+        if isinstance(app, QApplication):
+            apply_theme(app, theme)
 
     # -- behaviour ---------------------------------------------------
 

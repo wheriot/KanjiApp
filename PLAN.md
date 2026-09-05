@@ -156,14 +156,14 @@ README.md
 - `MainWindow` now lands on the Dashboard and refreshes Dashboard/Review/Stats when you switch to them or add a kanji
 - **Exit check:** every number reconciles with `review_log` (covered by `tests/test_stats_service.py`) ✅
 
-### Phase 5 — Polish (week 6–7)
-- Settings screen (per-deck limits, theme, FSRS params, font)
-- Credits/licenses screen
-- Keyboard shortcuts (space = reveal, 1–4 = rate)
-- Light/dark theme, bundled Noto Sans JP
-- `README.md`: `uv sync` then `uv run kanji-app` — one-command setup for you and your friend
-- `study.db` already lives in the per-user data dir (Phase 3); nothing to migrate here
-- **Exit check:** fresh `git clone` → `uv sync` → `uv run kanji-app` works on a clean machine
+### Phase 5 — Polish (week 6–7) ✅
+- `services/settings.py` (`AppSettings` + `SettingsStore`, persisted in the `setting` table)
+- Settings screen: theme (System/Light/Dark), FSRS target retention, per-deck new/review limits
+- `ui/theme.py`: `apply_theme` via `QStyleHints.setColorScheme`; `load_fonts` registers any font in `assets/fonts/` and picks a JP-capable family, else falls back to the OS
+- `scripts/fetch_font.py`: optional download of Noto Sans JP (SIL OFL) — `assets/fonts/` is gitignored (large binary, fetched on demand)
+- Credits/licences dialog (KANJIDIC2, KanjiVG, FSRS, Qt, Noto)
+- Keyboard: Space = reveal, 1–4 = rate (Review); Ctrl+1..5 = screen nav
+- **Exit check:** fresh `git clone` → `uv sync` → `uv run kanji-app` works; theme + retention + limits persist across restarts ✅
 - **This is the usable MVP:** N5 kanji, recognition + recall, one deck, full SRS loop.
 
 ### Phase 6 — Multiple decks (week 7–8)

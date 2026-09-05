@@ -112,7 +112,17 @@ Run `scripts/check.py` and make it green before considering a change done.
 - `MainWindow` refreshes Dashboard/Review/Stats on screen-change and on
   `catalog_vm.deck_changed`.
 
+## Settings & theme (Phase 5)
+
+- `services/settings.py` (`AppSettings`/`SettingsStore`) persists to the `setting`
+  table. `StudyService` owns the store, applies `fsrs_retention` to its
+  `FsrsScheduler`, and rebuilds it on `update_settings`.
+- `ui/theme.py`: `apply_theme` (via `QStyleHints.setColorScheme`) and `load_fonts`
+  (registers `assets/fonts/*`, else OS fallback). `assets/fonts/` is gitignored;
+  `scripts/fetch_font.py` populates it.
+- Per-deck limits live on the `deck` row; the Settings screen edits the current deck.
+
 ## Not yet built
 
-`Settings` screen = Phase 5. Multiple decks = Phase 6, vocab = Phase 7. Don't
-scaffold ahead of the current phase.
+Multiple decks = Phase 6, vocab = Phase 7. Don't scaffold ahead of the current
+phase.

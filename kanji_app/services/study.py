@@ -23,6 +23,7 @@ from kanji_app.core.review_session import DeckCounts
 from kanji_app.core.srs import FsrsScheduler, Scheduler
 from kanji_app.data import db
 from kanji_app.data.repositories import CardRepo, DeckRepo, KanjiRepo, ReviewLogRepo
+from kanji_app.services.settings import AppSettings, SettingsStore
 from kanji_app.services.stats import StatsService
 
 _STUDY_MODES = (CardMode.RECOGNITION, CardMode.RECALL)
@@ -62,7 +63,22 @@ class StudyService:
         self._cards = CardRepo(study_conn)
         self._log = ReviewLogRepo(study_conn)
         self._kanji = KanjiRepo(reference_conn)
-        self._scheduler = scheduler or FsrsScheduler()
+        self._settings_store = SettingsStore(study_conn)
+        self._settings = self._settings_store.load()
+        self._scheduler = scheduler or FsrsScheduler(self._settings.fsrs_retention)
+
+    # -- settings ---------------------------------------------------
+
+    @property
+    def settings(self) -> AppSettings:
+        return self._settings
+
+    def update_settings(self, new: AppSettings) -> AppSettings:
+        self._settings = self._settings_store.save(new)
+        # Only a scheduler built from a custom `scheduler=` arg is left alone.
+        if isinstance(self._scheduler, FsrsScheduler):
+            self._scheduler = FsrsScheduler(self._settings.fsrs_retention)
+        return self._settings
 
     # -- decks --------------------------------------------------------
 
@@ -71,6 +87,27 @@ class StudyService:
 
     def default_deck(self) -> Deck:
         return self._decks.ensure_default()
+
+    def get_deck(self, deck_id: int) -> Deck | None:
+        return self._decks.get(deck_id)
+
+    def create_deck(self, name: str) -> Deck:
+        return self._decks.create(name)
+
+    def update_deck(
+        self,
+        deck_id: int,
+        *,
+        name: str | None = None,
+        new_per_day: int | None = None,
+        reviews_per_day: int | None = None,
+    ) -> Deck:
+        return self._decks.update(
+            deck_id, name=name, new_per_day=new_per_day, reviews_per_day=reviews_per_day
+        )
+
+    def delete_deck(self, deck_id: int) -> None:
+        self._decks.delete(deck_id)
 
     # -- building a collection --------------------------------------
 

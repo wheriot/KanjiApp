@@ -37,6 +37,15 @@ Or all at once:
 uv run python scripts/check.py
 ```
 
+## Japanese fonts (optional)
+
+The app uses your OS's Japanese fonts by default (fine on Windows/macOS). To
+bundle Noto Sans JP for identical rendering everywhere:
+
+```
+uv run python -m scripts.fetch_font
+```
+
 ## Data pipeline
 
 The shipped reference database `kanji_app/resources/kanji.db` is built from
@@ -52,10 +61,9 @@ Widen coverage by adding e.g. `kanji_app/resources/jlpt/n4.txt` and rerunning wi
 
 ## Project status
 
-Phase 4 — dashboard & stats. On top of the Phase 3 review loop: a Dashboard with
-today's workload and a one-click "Start studying", and a Stats screen (retention,
-reviews-per-day, coming-due forecast, JLPT progress). See [PLAN.md](PLAN.md)
-§ "Feature roadmap".
+Phase 5 — usable MVP. Dashboard, Browse, Review (recognition + recall, FSRS),
+Stats, and Settings (theme, target retention, daily limits) + a credits screen.
+See [PLAN.md](PLAN.md) § "Feature roadmap".
 
 ## Data & licenses
 
