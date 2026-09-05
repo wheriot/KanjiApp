@@ -77,6 +77,7 @@ class BrowserView(QWidget):
         layout = QVBoxLayout(self)
         layout.addWidget(splitter)
 
+        self._detail.add_requested.connect(self._vm.add_selected_to_deck)
         self._vm.results_changed.connect(self._reload_results)
         self._vm.selection_changed.connect(self._reload_detail)
         self._reload_results()
@@ -99,6 +100,10 @@ class BrowserView(QWidget):
 
     def _reload_detail(self) -> None:
         self._detail.show_kanji(self._vm.selected, self._vm.drawing)
+        self._detail.set_deck_state(
+            can_add=self._vm.can_add_to_deck,
+            in_deck=self._vm.selected_in_deck,
+        )
 
     # -- view -> vm -----------------------------------------------------
 

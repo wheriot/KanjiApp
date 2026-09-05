@@ -52,8 +52,9 @@ Widen coverage by adding e.g. `kanji_app/resources/jlpt/n4.txt` and rerunning wi
 
 ## Project status
 
-Phase 2 — kanji browser. `uv run kanji-app` opens the Browse screen: search/filter
-the 103 N5 kanji, inspect readings + meanings, and watch stroke order animate.
+Phase 3 — spaced-repetition review loop. Browse and add kanji to your study deck,
+then review recognition + recall cards on the Review screen (FSRS scheduling,
+Again/Hard/Good/Easy). Progress is saved to `study.db` in your per-user data dir.
 See [PLAN.md](PLAN.md) § "Feature roadmap".
 
 ## Data & licenses

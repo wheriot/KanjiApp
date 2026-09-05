@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QFormLayout, QLabel, QVBoxLayout, QWidget
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import QFormLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from kanji_app.core.kanjivg import StrokeDrawing
 from kanji_app.core.models import Kanji, ReadingType
@@ -13,8 +13,14 @@ _PLACEHOLDER = "Select a kanji to see its details."
 
 
 class KanjiDetailPanel(QWidget):
+    add_requested = Signal()
+
     def __init__(self) -> None:
         super().__init__()
+
+        self._add_button = QPushButton()
+        self._add_button.clicked.connect(self.add_requested)
+        self._add_button.hide()
 
         self._literal = QLabel()
         literal_font = self._literal.font()
@@ -52,6 +58,7 @@ class KanjiDetailPanel(QWidget):
         content_layout.addWidget(self._literal)
         content_layout.addWidget(self._meanings)
         content_layout.addLayout(form)
+        content_layout.addWidget(self._add_button)
         content_layout.addWidget(self._strokes, stretch=1)
 
         outer = QVBoxLayout(self)
@@ -72,6 +79,11 @@ class KanjiDetailPanel(QWidget):
         self._on.setText("、".join(kanji.readings_of(ReadingType.ON)) or "—")
         self._kun.setText("、".join(kanji.readings_of(ReadingType.KUN)) or "—")
         self._meta.setText(_format_meta(kanji))
+
+    def set_deck_state(self, *, can_add: bool, in_deck: bool) -> None:
+        self._add_button.setVisible(can_add)
+        self._add_button.setEnabled(can_add and not in_deck)
+        self._add_button.setText("In study deck ✓" if in_deck else "Add to study deck")
 
 
 def _format_meta(kanji: Kanji) -> str:

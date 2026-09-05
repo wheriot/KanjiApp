@@ -9,8 +9,38 @@ from __future__ import annotations
 import sqlite3
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
+from datetime import UTC, datetime
 
-from kanji_app.core.models import Kanji, Meaning, Reading, ReadingType
+from kanji_app.core.models import (
+    Card,
+    CardMode,
+    CardState,
+    Deck,
+    DeckKind,
+    Kanji,
+    Meaning,
+    Rating,
+    Reading,
+    ReadingType,
+    SchedulingState,
+    SubjectType,
+)
+from kanji_app.core.srs import ReviewResult
+
+
+def _iso(moment: datetime) -> str:
+    return moment.astimezone(UTC).isoformat()
+
+
+def _dt(text: str) -> datetime:
+    parsed = datetime.fromisoformat(text)
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+
+
+def _new_id(cursor: sqlite3.Cursor) -> int:
+    row_id = cursor.lastrowid
+    assert row_id is not None
+    return row_id
 
 
 class KanjiRepo:
@@ -154,3 +184,199 @@ class KanjiRepo:
 
 def _marks(items: Iterable[object]) -> str:
     return ", ".join("?" for _ in items)
+
+
+class DeckRepo:
+    """Study decks (lives in the writable study database)."""
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self._conn = conn
+
+    def all(self) -> list[Deck]:
+        rows = self._conn.execute("SELECT * FROM deck ORDER BY created_at, id").fetchall()
+        return [self._row(r) for r in rows]
+
+    def get(self, deck_id: int) -> Deck | None:
+        row = self._conn.execute("SELECT * FROM deck WHERE id = ?", (deck_id,)).fetchone()
+        return self._row(row) if row else None
+
+    def create(self, name: str, *, kind: DeckKind = DeckKind.KANJI, description: str = "") -> Deck:
+        cursor = self._conn.execute(
+            "INSERT INTO deck (name, kind, description) VALUES (?, ?, ?)",
+            (name, kind.value, description),
+        )
+        created = self.get(_new_id(cursor))
+        assert created is not None
+        return created
+
+    def ensure_default(self) -> Deck:
+        existing = self.all()
+        return existing[0] if existing else self.create("My N5 Kanji")
+
+    @staticmethod
+    def _row(row: sqlite3.Row) -> Deck:
+        return Deck(
+            id=row["id"],
+            name=row["name"],
+            kind=DeckKind(row["kind"]),
+            description=row["description"],
+            new_per_day=row["new_per_day"],
+            reviews_per_day=row["reviews_per_day"],
+            created_at=_dt(row["created_at"]) if row["created_at"] else None,
+        )
+
+
+class CardRepo:
+    """Flashcards and their SRS scheduling state."""
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self._conn = conn
+
+    def for_deck(self, deck_id: int) -> list[Card]:
+        rows = self._conn.execute(
+            "SELECT * FROM card WHERE deck_id = ? ORDER BY id", (deck_id,)
+        ).fetchall()
+        return [self._row(r) for r in rows]
+
+    def get(self, card_id: int) -> Card | None:
+        row = self._conn.execute("SELECT * FROM card WHERE id = ?", (card_id,)).fetchone()
+        return self._row(row) if row else None
+
+    def modes_for_subject(
+        self, deck_id: int, subject_type: SubjectType, subject_id: int
+    ) -> set[CardMode]:
+        rows = self._conn.execute(
+            "SELECT mode FROM card WHERE deck_id = ? AND subject_type = ? AND subject_id = ?",
+            (deck_id, subject_type.value, subject_id),
+        ).fetchall()
+        return {CardMode(r["mode"]) for r in rows}
+
+    def create(
+        self,
+        deck_id: int,
+        subject_type: SubjectType,
+        subject_id: int,
+        mode: CardMode,
+        scheduling: SchedulingState,
+    ) -> Card:
+        cursor = self._conn.execute(
+            """
+            INSERT INTO card (deck_id, subject_type, subject_id, mode,
+                              state, step, due, stability, difficulty, reps, lapses)
+            VALUES (:deck_id, :subject_type, :subject_id, :mode,
+                    :state, :step, :due, :stability, :difficulty, :reps, :lapses)
+            """,
+            {
+                "deck_id": deck_id,
+                "subject_type": subject_type.value,
+                "subject_id": subject_id,
+                "mode": mode.value,
+                **_scheduling_params(scheduling),
+            },
+        )
+        created = self.get(_new_id(cursor))
+        assert created is not None
+        return created
+
+    def update_scheduling(self, card_id: int, scheduling: SchedulingState) -> None:
+        self._conn.execute(
+            """
+            UPDATE card SET state = :state, step = :step, due = :due,
+                            stability = :stability, difficulty = :difficulty,
+                            reps = :reps, lapses = :lapses,
+                            last_reviewed_at = :last_reviewed_at
+            WHERE id = :id
+            """,
+            {"id": card_id, **_scheduling_params(scheduling)},
+        )
+
+    @staticmethod
+    def _row(row: sqlite3.Row) -> Card:
+        scheduling = SchedulingState(
+            state=CardState(row["state"]),
+            step=row["step"],
+            due=_dt(row["due"]),
+            stability=row["stability"],
+            difficulty=row["difficulty"],
+            reps=row["reps"],
+            lapses=row["lapses"],
+            last_reviewed_at=_dt(row["last_reviewed_at"]) if row["last_reviewed_at"] else None,
+        )
+        return Card(
+            id=row["id"],
+            deck_id=row["deck_id"],
+            subject_type=SubjectType(row["subject_type"]),
+            subject_id=row["subject_id"],
+            mode=CardMode(row["mode"]),
+            scheduling=scheduling,
+            created_at=_dt(row["created_at"]) if row["created_at"] else None,
+        )
+
+
+class ReviewLogRepo:
+    """Append-only record of answered reviews."""
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self._conn = conn
+
+    def record(
+        self,
+        card_id: int,
+        rating: Rating,
+        result: ReviewResult,
+        reviewed_at: datetime,
+        elapsed_ms: int = 0,
+    ) -> None:
+        self._conn.execute(
+            """
+            INSERT INTO review_log (card_id, reviewed_at, rating, elapsed_ms,
+                                    prev_due, new_due, prev_stability, new_stability)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                card_id,
+                _iso(reviewed_at),
+                int(rating),
+                elapsed_ms,
+                _iso(result.previous_due),
+                _iso(result.state.due),
+                result.previous_stability,
+                result.new_stability,
+            ),
+        )
+
+    def count_since(self, deck_id: int, since: datetime) -> int:
+        row = self._conn.execute(
+            """
+            SELECT COUNT(*) FROM review_log rl
+            JOIN card c ON c.id = rl.card_id
+            WHERE c.deck_id = ? AND rl.reviewed_at >= ?
+            """,
+            (deck_id, _iso(since)),
+        ).fetchone()
+        return int(row[0])
+
+    def count_new_since(self, deck_id: int, since: datetime) -> int:
+        """Cards first introduced today (their first review has prev_stability 0)."""
+        row = self._conn.execute(
+            """
+            SELECT COUNT(*) FROM review_log rl
+            JOIN card c ON c.id = rl.card_id
+            WHERE c.deck_id = ? AND rl.reviewed_at >= ? AND rl.prev_stability = 0
+            """,
+            (deck_id, _iso(since)),
+        ).fetchone()
+        return int(row[0])
+
+
+def _scheduling_params(s: SchedulingState) -> dict[str, object]:
+    return {
+        "state": s.state.value,
+        "step": s.step,
+        "due": _iso(s.due),
+        "stability": s.stability,
+        "difficulty": s.difficulty,
+        "reps": s.reps,
+        "lapses": s.lapses,
+        "last_reviewed_at": _iso(s.last_reviewed_at) if s.last_reviewed_at else None,
+    }

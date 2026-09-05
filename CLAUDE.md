@@ -92,8 +92,17 @@ Run `scripts/check.py` and make it green before considering a change done.
 - Tests: services/view-models use the `kanji_db` SQL fixture; widget/view tests
   call `build_app([])` first (Qt runs `offscreen`, set in `conftest.py`).
 
+## Study data (Phase 3)
+
+- Two databases: the **reference** `kanji.db` (bundled, read-only use) and the
+  **study** `study.db` (per-user data dir, writable — decks/cards/review_log).
+  `StudyService` holds one connection to each. They never join.
+- All datetimes are UTC ISO strings in SQLite; `_iso` / `_dt` in `repositories.py`.
+- Daily new/review tallies are derived from `review_log`, not counters.
+- `core/review_session.py` is pure; `StudyService` is the stateful orchestrator;
+  `ReviewViewModel` tracks cursor + reveal state.
+
 ## Not yet built
 
-`Dashboard` / `Review` / `Stats` / `Settings` screens are placeholders. The
-`review_session` / SRS-loop wiring starts in Phase 3. Don't scaffold ahead of
-the current phase.
+`Dashboard` / `Stats` / `Settings` screens are placeholders (Phases 4–5). Multiple
+decks = Phase 6, vocab = Phase 7. Don't scaffold ahead of the current phase.

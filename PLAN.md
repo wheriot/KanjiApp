@@ -138,14 +138,15 @@ README.md
 - **Exit check:** browse/filter/search 103 N5 kanji, inspect any one, watch its stroke order ✅
 - Note: CJK glyphs in labels use the system font until Noto Sans JP is bundled (Phase 5); the stroke widget is font-independent
 
-### Phase 3 — SRS review loop (week 3–5) — core value
-- `srs.py` wrapper around FSRS; `review_session.py` builds the due queue
-- `review_view`: show prompt → reveal answer → rate (Again/Hard/Good/Easy)
-- Card creation: "add this kanji to my study deck" from browser/detail — creates both a **recognition** and a **recall** card
-- `card_widget` renders both modes (recognition shows the kanji; recall shows meaning + reading and asks for the kanji, self-graded)
-- Persist `review_log`, update card scheduling
-- Daily new-card limit + review limit in settings
-- **Exit check:** study a session mixing recognition + recall cards, close app, reopen, correct cards are due
+### Phase 3 — SRS review loop (week 3–5) — core value ✅
+- `core/review_session.py`: pure due-queue builder (day boundary at 04:00, daily allowances, due-then-new ordering)
+- `services/study.py` (`StudyService`): owns the writable `study.db` + the read-only reference `kanji.db`; `add_kanji` (creates recognition + recall), `start_session`, `answer` (FSRS → persist card + `review_log`), `deck_counts`
+- `data/repositories.py`: `DeckRepo` / `CardRepo` / `ReviewLogRepo` (datetimes stored as UTC ISO; daily tallies derived from `review_log`)
+- `ui/widgets/card_widget.py` (`CardFace`): recognition shows the kanji then reveals meaning/readings; recall shows meaning/readings then reveals the kanji
+- `ui/views/review_view.py` + `ui/view_models/review_vm.py`: idle summary → Show answer (Space) → rate (1–4 / buttons); Browse gets an "Add to study deck" button
+- Daily limits live on the `deck` row (`new_per_day` 10, `reviews_per_day` 200); a Settings UI comes in Phase 5
+- **Exit check:** study a mixed recognition/recall session, close, reopen — the same cards come due on schedule ✅
+- `study.db` is a fresh empty file on first run (no copy of `kanji.db` needed — the two databases stay separate)
 
 ### Phase 4 — Dashboard & stats (week 5–6)
 - Dashboard: due today, new today, streak, quick "Start studying"
@@ -158,7 +159,7 @@ README.md
 - Keyboard shortcuts (space = reveal, 1–4 = rate)
 - Light/dark theme, bundled Noto Sans JP
 - `README.md`: `uv sync` then `uv run kanji-app` — one-command setup for you and your friend
-- First-run: copy the bundled `resources/kanji.db` to a per-user data dir so study data survives updates
+- `study.db` already lives in the per-user data dir (Phase 3); nothing to migrate here
 - **Exit check:** fresh `git clone` → `uv sync` → `uv run kanji-app` works on a clean machine
 - **This is the usable MVP:** N5 kanji, recognition + recall, one deck, full SRS loop.
 

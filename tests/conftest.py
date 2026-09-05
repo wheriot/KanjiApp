@@ -5,13 +5,17 @@ from __future__ import annotations
 import os
 import sqlite3
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 
 # Run Qt without a real display so the UI smoke tests work in CI / headless envs.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from kanji_app.config import BUNDLED_DB
 from kanji_app.data import db
+from kanji_app.data.repositories import KanjiRepo
+from kanji_app.services.study import StudyService, open_study_service
 
 
 @pytest.fixture
@@ -51,3 +55,24 @@ def kanji_db(conn: sqlite3.Connection) -> sqlite3.Connection:
         """
     )
     return conn
+
+
+@pytest.fixture
+def reference_repo() -> Iterator[KanjiRepo]:
+    """KanjiRepo over the real shipped kanji.db."""
+    connection = db.connect(BUNDLED_DB)
+    db.migrate(connection)
+    try:
+        yield KanjiRepo(connection)
+    finally:
+        connection.close()
+
+
+@pytest.fixture
+def study_service(tmp_path: Path) -> Iterator[StudyService]:
+    """A StudyService with a fresh study.db and the real reference kanji.db."""
+    service = open_study_service(tmp_path)
+    try:
+        yield service
+    finally:
+        service.close()

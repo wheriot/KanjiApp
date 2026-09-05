@@ -13,15 +13,24 @@ from PySide6.QtCore import QObject, Signal
 from kanji_app.core.kanjivg import StrokeDrawing
 from kanji_app.core.models import Kanji
 from kanji_app.services.catalog import FilterOptions, KanjiCatalog, KanjiFilter
+from kanji_app.services.study import StudyService
 
 
 class CatalogViewModel(QObject):
     results_changed = Signal()
     selection_changed = Signal()
+    deck_changed = Signal()  # a kanji was added to the study deck
 
-    def __init__(self, catalog: KanjiCatalog) -> None:
+    def __init__(
+        self,
+        catalog: KanjiCatalog,
+        study: StudyService | None = None,
+        deck_id: int | None = None,
+    ) -> None:
         super().__init__()
         self._catalog = catalog
+        self._study = study
+        self._deck_id = deck_id
         self._filter = KanjiFilter()
         self._results: list[Kanji] = []
         self._selected: Kanji | None = None
@@ -45,6 +54,16 @@ class CatalogViewModel(QObject):
     @property
     def drawing(self) -> StrokeDrawing | None:
         return self._drawing
+
+    @property
+    def can_add_to_deck(self) -> bool:
+        return self._study is not None and self._deck_id is not None
+
+    @property
+    def selected_in_deck(self) -> bool:
+        if self._study is None or self._deck_id is None or self._selected is None:
+            return False
+        return self._study.is_in_deck(self._deck_id, self._selected.id)
 
     def filter_options(self) -> FilterOptions:
         return self._catalog.filter_options()
@@ -70,6 +89,18 @@ class CatalogViewModel(QObject):
             self._selected = self._catalog.get(kanji_id)
             self._drawing = self._catalog.stroke_drawing(kanji_id)
         self.selection_changed.emit()
+
+    def add_selected_to_deck(self) -> None:
+        if (
+            self._study is None
+            or self._deck_id is None
+            or self._selected is None
+            or self.selected_in_deck
+        ):
+            return
+        self._study.add_kanji(self._deck_id, self._selected.id)
+        self.deck_changed.emit()
+        self.selection_changed.emit()  # refresh the detail panel's Add button
 
     def refresh(self) -> None:
         self._results = self._catalog.browse(self._filter)
