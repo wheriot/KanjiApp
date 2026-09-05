@@ -106,6 +106,24 @@ class CatalogViewModel(QObject):
         self.deck_changed.emit()
         self.selection_changed.emit()  # refresh the detail panel's Add button
 
+    def not_in_deck_count(self) -> int:
+        """How many of the current results aren't in the deck yet."""
+        if self._study is None or self._deck_id is None:
+            return 0
+        return sum(1 for k in self._results if not self._study.is_in_deck(self._deck_id, k.id))
+
+    def add_all_results_to_deck(self) -> int:
+        """Add every current result to the deck. Returns kanji added."""
+        if self._study is None or self._deck_id is None:
+            return 0
+        ids = [k.id for k in self._results if not self._study.is_in_deck(self._deck_id, k.id)]
+        if not ids:
+            return 0
+        self._study.add_kanji_bulk(self._deck_id, ids)
+        self.deck_changed.emit()
+        self.selection_changed.emit()
+        return len(ids)
+
     def refresh(self) -> None:
         self._results = self._catalog.browse(self._filter)
         self.results_changed.emit()

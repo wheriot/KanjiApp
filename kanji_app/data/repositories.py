@@ -69,7 +69,7 @@ class KanjiRepo:
         jlpt: int | None = None,
         grade: int | None = None,
         stroke_count: int | None = None,
-        limit: int = 500,
+        limit: int = 5000,
     ) -> list[Kanji]:
         """Filtered kanji list. ``text`` matches a literal, meaning, or reading.
 
@@ -212,7 +212,7 @@ class VocabRepo:
         row = self._conn.execute("SELECT * FROM vocab WHERE id = ?", (vocab_id,)).fetchone()
         return self._hydrate([row])[0] if row else None
 
-    def find(self, text: str = "", limit: int = 500) -> list[Vocab]:
+    def find(self, text: str = "", limit: int = 2000) -> list[Vocab]:
         text = text.strip()
         if text:
             like = f"%{text}%"
