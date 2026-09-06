@@ -31,6 +31,15 @@ class SettingsViewModel(QObject):
     def fsrs_retention(self) -> float:
         return self._settings.fsrs_retention
 
+    @property
+    def review_input(self) -> str:
+        return self._settings.review_input
+
+    def set_review_input(self, mode: str) -> None:
+        if mode != self._settings.review_input:
+            self._settings = self._study.update_settings(replace(self._settings, review_input=mode))
+            self.changed.emit()
+
     def set_theme(self, theme: str) -> None:
         if theme != self._settings.theme:
             self._settings = self._study.update_settings(replace(self._settings, theme=theme))

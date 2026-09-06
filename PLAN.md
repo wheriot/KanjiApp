@@ -190,6 +190,18 @@ README.md
 - `StudyService.add_kanji_bulk` / `add_vocab_bulk` (one transaction; skip subjects already in the deck)
 - `AddAllButton` on both Browse tabs: adds every kanji/word matching the current filters + search to the current deck, with a confirmation dialog (e.g. filter to Grade 3 → "Add all 200")
 
+### Post-roadmap — sentences, romaji, smart deck ✅
+- `core/romaji.py`: kana↔romaji (modified Hepburn; `to_kana` accepts Hepburn + kunrei). Romaji shown next to every reading in the detail panels and review cards
+- `scripts/import_tatoeba.py`: Tanaka Corpus example pairs (~28k short sentences, ≤3 per vocab), shown on the vocab detail + review card; `vocab.frequency` from JMdict `nf` bands
+- Kanji detail panel now lists the vocabulary that uses the kanji
+- `SmartAddControl` on both Browse tabs: "Add the N most common [kanji/words] I don't have" (results are frequency-ordered)
+- Shipped `kanji.db` ~18 MB
+
+### Post-roadmap — review answer modes ✅
+- `AppSettings.review_input`: `reveal` (default, flip + self-grade) / `choose` (pick from 4, auto-graded) / `type` (type the reading, kana or romaji, auto-graded)
+- Distractors sampled from `KanjiRepo.sample` / `VocabRepo.sample`; typed answers checked via `core/romaji.to_kana` + kana normalisation
+- `ReviewViewModel` gains `choose` / `submit_reading` / `continue_`; `ReviewView` footer is a 6-page stack keyed on `(input_mode, phase)`
+
 ### Later / optional
 - Tatoeba example sentences on the vocab detail + review screens
 - Frozen/standalone build (PyInstaller) — only if the audience ever grows beyond Python users

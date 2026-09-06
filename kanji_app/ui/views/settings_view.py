@@ -14,11 +14,16 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from kanji_app.services.settings import THEMES
+from kanji_app.services.settings import REVIEW_INPUTS, THEMES
 from kanji_app.ui.view_models.settings_vm import SettingsViewModel
 from kanji_app.ui.views.credits import CreditsDialog
 
 _THEME_LABELS = {"system": "Follow system", "light": "Light", "dark": "Dark"}
+_INPUT_LABELS = {
+    "reveal": "Flip and self-grade",
+    "choose": "Pick from four options",
+    "type": "Type the reading",
+}
 
 
 class SettingsView(QWidget):
@@ -41,11 +46,20 @@ class SettingsView(QWidget):
         self._retention.setValue(vm.fsrs_retention)
         self._retention.valueChanged.connect(self._vm.set_retention)
 
+        self._review_input = QComboBox()
+        for key in REVIEW_INPUTS:
+            self._review_input.addItem(_INPUT_LABELS[key], key)
+        self._review_input.setCurrentIndex(self._review_input.findData(vm.review_input))
+        self._review_input.currentIndexChanged.connect(
+            lambda: self._vm.set_review_input(self._review_input.currentData())
+        )
+
         appearance = QGroupBox("Appearance and scheduling")
         form = QFormLayout(appearance)
         form.addRow("Theme", self._theme)
         form.addRow("Target retention", self._retention)
         form.addRow("", _hint("Higher retention = more reviews, shorter intervals."))
+        form.addRow("Review answers", self._review_input)
 
         self._credits = QPushButton("Credits and licences…")
         self._credits.clicked.connect(self._open_credits)

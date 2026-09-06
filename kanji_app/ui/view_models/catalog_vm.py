@@ -6,12 +6,13 @@ Views observe the Qt signals and read the plain properties.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import replace
 
 from PySide6.QtCore import QObject, Signal
 
 from kanji_app.core.kanjivg import StrokeDrawing
-from kanji_app.core.models import Kanji
+from kanji_app.core.models import Kanji, Vocab
 from kanji_app.services.catalog import FilterOptions, KanjiCatalog, KanjiFilter
 from kanji_app.services.study import StudyService
 
@@ -54,6 +55,11 @@ class CatalogViewModel(QObject):
     @property
     def drawing(self) -> StrokeDrawing | None:
         return self._drawing
+
+    def selected_words(self) -> list[Vocab]:
+        if self._selected is None:
+            return []
+        return self._catalog.vocab_for_kanji(self._selected.id)
 
     @property
     def can_add_to_deck(self) -> bool:
@@ -114,15 +120,30 @@ class CatalogViewModel(QObject):
 
     def add_all_results_to_deck(self) -> int:
         """Add every current result to the deck. Returns kanji added."""
+        return self._add_ids(k.id for k in self._results)
+
+    def add_top_n_to_deck(self, n: int) -> int:
+        """Add the N most frequent results not yet in the deck (results are freq-ordered)."""
         if self._study is None or self._deck_id is None:
             return 0
-        ids = [k.id for k in self._results if not self._study.is_in_deck(self._deck_id, k.id)]
-        if not ids:
+        wanted: list[int] = []
+        for kanji in self._results:
+            if not self._study.is_in_deck(self._deck_id, kanji.id):
+                wanted.append(kanji.id)
+            if len(wanted) >= n:
+                break
+        return self._add_ids(wanted)
+
+    def _add_ids(self, ids: Iterable[int]) -> int:
+        if self._study is None or self._deck_id is None:
             return 0
-        self._study.add_kanji_bulk(self._deck_id, ids)
+        pending = [i for i in ids if not self._study.is_in_deck(self._deck_id, i)]
+        if not pending:
+            return 0
+        self._study.add_kanji_bulk(self._deck_id, pending)
         self.deck_changed.emit()
         self.selection_changed.emit()
-        return len(ids)
+        return len(pending)
 
     def refresh(self) -> None:
         self._results = self._catalog.browse(self._filter)

@@ -6,10 +6,17 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QFormLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from kanji_app.core.kanjivg import StrokeDrawing
-from kanji_app.core.models import Kanji, ReadingType
+from kanji_app.core.models import Kanji, ReadingType, Vocab
+from kanji_app.core.romaji import to_romaji
 from kanji_app.ui.widgets.stroke_order_widget import StrokeOrderWidget
 
 _PLACEHOLDER = "Select a kanji to see its details."
+
+
+def _readings_line(values: tuple[str, ...]) -> str:
+    if not values:
+        return "—"
+    return "、".join(f"{v} ({to_romaji(v)})" for v in values)
 
 
 class KanjiDetailPanel(QWidget):
@@ -37,7 +44,8 @@ class KanjiDetailPanel(QWidget):
         self._on = QLabel()
         self._kun = QLabel()
         self._meta = QLabel()
-        for label in (self._on, self._kun, self._meta):
+        self._words = QLabel()
+        for label in (self._on, self._kun, self._meta, self._words):
             label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
             label.setWordWrap(True)
 
@@ -45,6 +53,7 @@ class KanjiDetailPanel(QWidget):
         form.addRow("On", self._on)
         form.addRow("Kun", self._kun)
         form.addRow("Info", self._meta)
+        form.addRow("Words", self._words)
 
         self._strokes = StrokeOrderWidget()
 
@@ -67,7 +76,12 @@ class KanjiDetailPanel(QWidget):
 
         self.show_kanji(None, None)
 
-    def show_kanji(self, kanji: Kanji | None, drawing: StrokeDrawing | None) -> None:
+    def show_kanji(
+        self,
+        kanji: Kanji | None,
+        drawing: StrokeDrawing | None,
+        words: list[Vocab] | None = None,
+    ) -> None:
         self._placeholder.setVisible(kanji is None)
         self._content.setVisible(kanji is not None)
         self._strokes.set_drawing(drawing)
@@ -76,9 +90,12 @@ class KanjiDetailPanel(QWidget):
 
         self._literal.setText(kanji.literal)
         self._meanings.setText(", ".join(m.value for m in kanji.meanings) or "—")
-        self._on.setText("、".join(kanji.readings_of(ReadingType.ON)) or "—")
-        self._kun.setText("、".join(kanji.readings_of(ReadingType.KUN)) or "—")
+        self._on.setText(_readings_line(kanji.readings_of(ReadingType.ON)))
+        self._kun.setText(_readings_line(kanji.readings_of(ReadingType.KUN)))
         self._meta.setText(_format_meta(kanji))
+        self._words.setText(
+            "  ".join(f"{v.expression} [{v.kana}]" for v in (words or [])[:8]) or "—"
+        )
 
     def set_deck_state(self, *, can_add: bool, in_deck: bool) -> None:
         self._add_button.setVisible(can_add)

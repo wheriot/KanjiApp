@@ -11,8 +11,9 @@ picked up immediately, while the user's progress in ``study.db`` is untouched.
 
 from __future__ import annotations
 
+import random
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -27,10 +28,12 @@ from kanji_app.core.models import (
     Kanji,
     Rating,
     ReadingType,
+    Sentence,
     SubjectType,
     Vocab,
 )
 from kanji_app.core.review_session import DeckCounts
+from kanji_app.core.romaji import to_romaji
 from kanji_app.core.srs import FsrsScheduler, Scheduler
 from kanji_app.data import db
 from kanji_app.data.repositories import CardRepo, DeckRepo, KanjiRepo, ReviewLogRepo, VocabRepo
@@ -54,6 +57,12 @@ class ReviewItem:
     answer: str
     answer_note: str
     stroke: StrokeDrawing | None = None
+    sentence: Sentence | None = None
+    # "choose" mode: shuffled answer candidates and the index of the right one
+    options: tuple[str, ...] = ()
+    correct_option: int = -1
+    # "type" mode: readings that count as correct when typed
+    accepted: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -249,9 +258,56 @@ class StudyService:
     def _to_item(self, card: Card) -> ReviewItem | None:
         if card.subject_type == SubjectType.KANJI:
             kanji = self._kanji.get(card.subject_id)
-            return _kanji_item(card, kanji, self._stroke_drawing(kanji)) if kanji else None
-        vocab = self._vocab.get(card.subject_id)
-        return _vocab_item(card, vocab) if vocab else None
+            if kanji is None:
+                return None
+            base = _kanji_item(card, kanji, self._stroke_drawing(kanji))
+        else:
+            vocab = self._vocab.get(card.subject_id)
+            if vocab is None:
+                return None
+            sentences = self._vocab.sentences_for(card.subject_id, limit=1)
+            base = _vocab_item(card, vocab, sentences[0] if sentences else None)
+        return self._for_input_mode(base)
+
+    def _for_input_mode(self, item: ReviewItem) -> ReviewItem:
+        mode = self._settings.review_input
+        if mode == "choose":
+            options, correct = self._build_choices(item)
+            return replace(item, options=options, correct_option=correct)
+        if mode == "type":
+            return replace(item, prompt_note="", accepted=self._accepted_readings(item))
+        return item
+
+    def _build_choices(self, item: ReviewItem) -> tuple[tuple[str, ...], int]:
+        recall = item.card.mode == CardMode.RECALL
+        if item.card.subject_type == SubjectType.KANJI:
+            others = self._kanji.sample(item.card.subject_id, 4)
+            distractors = [
+                k.literal if recall else ", ".join(m.value for m in k.meanings[:2]) for k in others
+            ]
+        else:
+            vocab_others = self._vocab.sample(item.card.subject_id, 4)
+            distractors = [
+                v.expression if recall else ", ".join(v.glosses[:2]) for v in vocab_others
+            ]
+
+        pool = [item.answer]
+        for text in distractors:
+            if text and text not in pool and len(pool) < 4:
+                pool.append(text)
+        random.shuffle(pool)
+        return tuple(pool), pool.index(item.answer)
+
+    def _accepted_readings(self, item: ReviewItem) -> tuple[str, ...]:
+        if item.card.subject_type == SubjectType.KANJI:
+            kanji = self._kanji.get(item.card.subject_id)
+            if kanji is None:
+                return ()
+            values = [r.value for r in kanji.readings]
+        else:
+            vocab = self._vocab.get(item.card.subject_id)
+            values = [vocab.kana] if vocab else []
+        return tuple(_strip_reading(v) for v in values if v)
 
     def _stroke_drawing(self, kanji: Kanji) -> StrokeDrawing | None:
         svg = self._kanji.stroke_svg(kanji.id)
@@ -266,10 +322,20 @@ class StudyService:
         self._reference.close()
 
 
+def _with_romaji(reading: str) -> str:
+    roman = to_romaji(reading)
+    return f"{reading} ({roman})" if roman and roman != reading else reading
+
+
+def _strip_reading(reading: str) -> str:
+    """Drop okurigana markers so '-び', 'あか.い' etc. compare as bare kana."""
+    return reading.replace("-", "").replace(".", "").replace("・", "").strip()
+
+
 def _readings(kanji: Kanji) -> str:
-    on = "、".join(kanji.readings_of(ReadingType.ON))
-    kun = "、".join(kanji.readings_of(ReadingType.KUN))
-    return "  /  ".join(p for p in (on, kun) if p)
+    on = "、".join(_with_romaji(r) for r in kanji.readings_of(ReadingType.ON))
+    kun = "、".join(_with_romaji(r) for r in kanji.readings_of(ReadingType.KUN))
+    return "   /   ".join(p for p in (on, kun) if p)
 
 
 def _kanji_item(card: Card, kanji: Kanji, stroke: StrokeDrawing | None) -> ReviewItem:
@@ -294,22 +360,25 @@ def _kanji_item(card: Card, kanji: Kanji, stroke: StrokeDrawing | None) -> Revie
     )
 
 
-def _vocab_item(card: Card, vocab: Vocab) -> ReviewItem:
+def _vocab_item(card: Card, vocab: Vocab, sentence: Sentence | None) -> ReviewItem:
     glosses = ", ".join(vocab.glosses)
+    reading = _with_romaji(vocab.kana)
     if card.mode == CardMode.RECALL:
         return ReviewItem(
             card=card,
             prompt=glosses,
             prompt_note="",
             answer=vocab.expression,
-            answer_note=vocab.kana,
+            answer_note=reading,
+            sentence=sentence,
         )
     return ReviewItem(
         card=card,
         prompt=vocab.expression,
         prompt_note="",
         answer=glosses,
-        answer_note=vocab.kana,
+        answer_note=reading,
+        sentence=sentence,
     )
 
 

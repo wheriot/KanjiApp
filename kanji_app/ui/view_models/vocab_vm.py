@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from PySide6.QtCore import QObject, Signal
 
-from kanji_app.core.models import Vocab
+from kanji_app.core.models import Sentence, Vocab
 from kanji_app.services.catalog import KanjiCatalog
 from kanji_app.services.study import StudyService
 
@@ -51,6 +53,11 @@ class VocabViewModel(QObject):
         kanji = self._catalog.get(kanji_id)
         return kanji.literal if kanji is not None else None
 
+    def selected_sentences(self) -> list[Sentence]:
+        if self._selected is None:
+            return []
+        return self._catalog.vocab_sentences(self._selected.id)
+
     def set_text(self, text: str) -> None:
         if text != self._text:
             self._text = text
@@ -84,15 +91,29 @@ class VocabViewModel(QObject):
         )
 
     def add_all_results_to_deck(self) -> int:
+        return self._add_ids(v.id for v in self._results)
+
+    def add_top_n_to_deck(self, n: int) -> int:
         if self._study is None or self._deck_id is None:
             return 0
-        ids = [v.id for v in self._results if not self._study.is_vocab_in_deck(self._deck_id, v.id)]
-        if not ids:
+        wanted: list[int] = []
+        for vocab in self._results:
+            if not self._study.is_vocab_in_deck(self._deck_id, vocab.id):
+                wanted.append(vocab.id)
+            if len(wanted) >= n:
+                break
+        return self._add_ids(wanted)
+
+    def _add_ids(self, ids: Iterable[int]) -> int:
+        if self._study is None or self._deck_id is None:
             return 0
-        self._study.add_vocab_bulk(self._deck_id, ids)
+        pending = [i for i in ids if not self._study.is_vocab_in_deck(self._deck_id, i)]
+        if not pending:
+            return 0
+        self._study.add_vocab_bulk(self._deck_id, pending)
         self.deck_changed.emit()
         self.selection_changed.emit()
-        return len(ids)
+        return len(pending)
 
     def refresh(self) -> None:
         self._results = self._catalog.browse_vocab(self._text)

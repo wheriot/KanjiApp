@@ -68,5 +68,29 @@ def test_add_all_noop_without_a_deck() -> None:
         vm = CatalogViewModel(catalog)  # no study service
         assert vm.not_in_deck_count() == 0
         assert vm.add_all_results_to_deck() == 0
+        assert vm.add_top_n_to_deck(10) == 0
+    finally:
+        catalog.close()
+
+
+def test_smart_add_takes_the_most_common_first(study_service: StudyService) -> None:
+    catalog = open_bundled_catalog()
+    try:
+        deck_id = study_service.default_deck().id
+        vm = CatalogViewModel(catalog, study_service, deck_id)  # no filter -> freq order
+
+        added = vm.add_top_n_to_deck(15)
+        assert added == 15
+        assert study_service.deck_card_count(deck_id) == 30
+
+        # the added kanji are the 15 most frequent (results are frequency-ordered)
+        wanted = [k.literal for k in vm.results[:15]]
+        for literal in wanted:
+            assert study_service.is_in_deck(
+                deck_id, next(k.id for k in vm.results if k.literal == literal)
+            )
+
+        # asking again adds the *next* 15, not the same ones
+        assert vm.add_top_n_to_deck(15) == 15
     finally:
         catalog.close()

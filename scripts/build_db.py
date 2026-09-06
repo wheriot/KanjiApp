@@ -26,6 +26,8 @@ from scripts.import_kanjidic import _resolve_source as resolve_kanjidic
 from scripts.import_kanjidic import import_kanjidic
 from scripts.import_kanjivg import _resolve_source as resolve_kanjivg
 from scripts.import_kanjivg import import_kanjivg
+from scripts.import_tatoeba import _resolve_source as resolve_tatoeba
+from scripts.import_tatoeba import import_tatoeba
 
 
 def _reset_db(path: Path) -> None:
@@ -62,7 +64,8 @@ def main() -> int:
     parser.add_argument("--kanjidic", help="path or URL to kanjidic2.xml(.gz)")
     parser.add_argument("--kanjivg", help="path or URL to a KanjiVG zip / directory")
     parser.add_argument("--jmdict", help="path or URL to JMdict_e(.gz)")
-    parser.add_argument("--no-vocab", action="store_true", help="skip the JMdict vocab import")
+    parser.add_argument("--tatoeba", help="path or URL to examples.utf(.gz)")
+    parser.add_argument("--no-vocab", action="store_true", help="skip JMdict + example sentences")
     parser.add_argument("--out", type=Path, default=DEFAULT_DB)
     args = parser.parse_args()
 
@@ -85,10 +88,12 @@ def main() -> int:
     print("importing KanjiVG...")
     n_svg, missing = import_kanjivg(kanjivg_path, conn, charset)
 
-    n_vocab = 0
+    n_vocab = n_sentences = 0
     if jmdict_path is not None:
         print("importing JMdict vocab...")
         n_vocab = import_jmdict(jmdict_path, conn, charset)
+        print("importing example sentences...")
+        n_sentences, _links = import_tatoeba(resolve_tatoeba(args.tatoeba), conn, charset)
 
     print("applying JLPT levels...")
     _apply_jlpt_levels(conn)
@@ -107,7 +112,8 @@ def main() -> int:
         f"\nbuilt {args.out} ({size_kb:.0f} KB)\n"
         f"  kanji:           {n_kanji}\n"
         f"  stroke diagrams: {n_svg}\n"
-        f"  vocab:           {n_vocab}"
+        f"  vocab:           {n_vocab}\n"
+        f"  sentences:       {n_sentences}"
     )
     if missing:
         print(f"  no KanjiVG for:  {' '.join(missing)}")

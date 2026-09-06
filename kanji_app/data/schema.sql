@@ -54,7 +54,8 @@ CREATE TABLE IF NOT EXISTS vocab (
     id         INTEGER PRIMARY KEY,
     expression TEXT    NOT NULL,
     kana       TEXT    NOT NULL,
-    jlpt       INTEGER
+    jlpt       INTEGER,
+    frequency  INTEGER   -- coarse rank from JMdict 'nfXX' bands (1 = most common)
 );
 
 CREATE TABLE IF NOT EXISTS vocab_gloss (
@@ -69,6 +70,21 @@ CREATE TABLE IF NOT EXISTS vocab_kanji (
     kanji_id INTEGER NOT NULL REFERENCES kanji(id) ON DELETE CASCADE,
     PRIMARY KEY (vocab_id, kanji_id)
 );
+
+-- Example sentences (Tanaka Corpus / Tatoeba, CC BY-SA, EDRDG).
+CREATE TABLE IF NOT EXISTS sentence (
+    id         INTEGER PRIMARY KEY,
+    japanese   TEXT    NOT NULL,
+    english    TEXT    NOT NULL,
+    length     INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS vocab_sentence (
+    vocab_id    INTEGER NOT NULL REFERENCES vocab(id) ON DELETE CASCADE,
+    sentence_id INTEGER NOT NULL REFERENCES sentence(id) ON DELETE CASCADE,
+    PRIMARY KEY (vocab_id, sentence_id)
+);
+CREATE INDEX IF NOT EXISTS idx_vocab_sentence_vocab ON vocab_sentence(vocab_id);
 
 -- ----------------------------------------------------------------------------
 -- Study state (lives in the per-user study.db)
