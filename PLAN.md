@@ -195,7 +195,12 @@ README.md
 - `scripts/import_tatoeba.py`: Tanaka Corpus example pairs (~28k short sentences, ≤3 per vocab), shown on the vocab detail + review card; `vocab.frequency` from JMdict `nf` bands
 - Kanji detail panel now lists the vocabulary that uses the kanji
 - `SmartAddControl` on both Browse tabs: "Add the N most common [kanji/words] I don't have" (results are frequency-ordered)
-- Shipped `kanji.db` ~17 MB
+- Shipped `kanji.db` ~18 MB
+
+### Post-roadmap — review answer modes ✅
+- `AppSettings.review_input`: `reveal` (default, flip + self-grade) / `choose` (pick from 4, auto-graded) / `type` (type the reading, kana or romaji, auto-graded)
+- Distractors sampled from `KanjiRepo.sample` / `VocabRepo.sample`; typed answers checked via `core/romaji.to_kana` + kana normalisation
+- `ReviewViewModel` gains `choose` / `submit_reading` / `continue_`; `ReviewView` footer is a 6-page stack keyed on `(input_mode, phase)`
 
 ### Later / optional
 - Tatoeba example sentences on the vocab detail + review screens

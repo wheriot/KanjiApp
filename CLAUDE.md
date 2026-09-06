@@ -140,7 +140,17 @@ Charset files in `resources/jlpt/`: `joyo.txt` (build scope) and `n1/n2/n4/n5.tx
 `build_db.py` applies whatever `n*.txt` files are present. `KanjiRepo.find` /
 catalog `browse` default `limit` is 5000 to cover the full set.
 
+## Review answer modes (`AppSettings.review_input`)
+
+- `reveal` (default) — `ReviewViewModel.reveal()` then `answer(rating)`.
+- `choose` — `ReviewItem.options` / `correct_option` built by `StudyService._build_choices`;
+  VM `choose(i)` → auto-grade → `continue_()`.
+- `type` — `ReviewItem.accepted` readings; `prompt_note` is blanked so the answer
+  doesn't leak; VM `submit_reading(text)` normalises via `romaji.to_kana` + kana fold.
+- `ReviewView` footer is a 6-page `QStackedWidget` selected by `_page_for()`.
+
 ## Roadmap status
 
-Phases 0–7 are done. Remaining items live under PLAN.md "Later / optional"
-(Tatoeba sentences, PyInstaller build, handwriting, audio).
+Phases 0–7 are done, plus follow-ups (full Jōyō, bulk add, sentences, romaji,
+smart deck, review modes). Remaining items are under PLAN.md "Later / optional"
+(audio, PyInstaller, handwriting).

@@ -1,4 +1,9 @@
-"""The Review screen: run through a deck's due queue with FSRS grading."""
+"""The Review screen: run through a deck's due queue.
+
+Supports three answer styles (chosen in Settings): flip-and-self-grade, pick
+from four options, or type the reading. The footer is a stack of small panels
+switched by ``(input_mode, phase)``.
+"""
 
 from __future__ import annotations
 
@@ -7,6 +12,7 @@ from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPushButton,
     QStackedWidget,
     QVBoxLayout,
@@ -17,12 +23,8 @@ from kanji_app.core.models import Rating
 from kanji_app.ui.view_models.review_vm import ReviewViewModel
 from kanji_app.ui.widgets.card_widget import CardFace
 
-_RATING_KEYS = {
-    Rating.AGAIN: "1",
-    Rating.HARD: "2",
-    Rating.GOOD: "3",
-    Rating.EASY: "4",
-}
+_RATING_KEYS = {Rating.AGAIN: "1", Rating.HARD: "2", Rating.GOOD: "3", Rating.EASY: "4"}
+_IDLE, _REVEAL_Q, _REVEAL_A, _CHOOSE_Q, _TYPE_Q, _CONTINUE = range(6)
 
 
 class ReviewView(QWidget):
@@ -32,14 +34,15 @@ class ReviewView(QWidget):
 
         self._status = QLabel()
         self._status.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
         self._card = CardFace()
 
-        # footer: page 0 = idle/summary, page 1 = "show answer", page 2 = ratings
         self._footer = QStackedWidget()
         self._footer.addWidget(self._build_idle_page())
         self._footer.addWidget(self._build_reveal_page())
         self._footer.addWidget(self._build_rating_page())
+        self._footer.addWidget(self._build_choose_page())
+        self._footer.addWidget(self._build_type_page())
+        self._footer.addWidget(self._build_continue_page())
 
         layout = QVBoxLayout(self)
         layout.addWidget(self._status)
@@ -80,22 +83,63 @@ class ReviewView(QWidget):
             box.addWidget(button)
         return page
 
+    def _build_choose_page(self) -> QWidget:
+        page = QWidget()
+        box = QHBoxLayout(page)
+        self._choice_buttons: list[QPushButton] = []
+        for index in range(4):
+            button = QPushButton()
+            button.clicked.connect(lambda _=False, i=index: self._vm.choose(i))
+            self._choice_buttons.append(button)
+            box.addWidget(button)
+        return page
+
+    def _build_type_page(self) -> QWidget:
+        page = QWidget()
+        box = QHBoxLayout(page)
+        self._reading_input = QLineEdit()
+        self._reading_input.setPlaceholderText("Type the reading (kana or romaji), then Enter")
+        self._reading_input.returnPressed.connect(self._submit_reading)
+        submit = QPushButton("Submit")
+        submit.clicked.connect(self._submit_reading)
+        box.addWidget(self._reading_input, stretch=1)
+        box.addWidget(submit)
+        return page
+
+    def _build_continue_page(self) -> QWidget:
+        page = QWidget()
+        box = QHBoxLayout(page)
+        button = QPushButton("Continue  (Space)")
+        button.clicked.connect(self._vm.continue_)
+        box.addWidget(button)
+        return page
+
     # -- keyboard -------------------------------------------------
 
     def _install_shortcuts(self) -> None:
-        reveal = QShortcut(QKeySequence(Qt.Key.Key_Space), self)
-        reveal.activated.connect(self._on_space)
+        QShortcut(QKeySequence(Qt.Key.Key_Space), self, self._on_space)
+        QShortcut(QKeySequence(Qt.Key.Key_Return), self, self._on_space)
         for rating, key in _RATING_KEYS.items():
-            shortcut = QShortcut(QKeySequence(key), self)
-            shortcut.activated.connect(lambda r=rating: self._on_rating_key(r))
+            QShortcut(QKeySequence(key), self, lambda r=rating: self._on_number(int(r.value)))
 
     def _on_space(self) -> None:
-        if self._vm.in_progress and not self._vm.revealed:
+        page = self._footer.currentIndex()
+        if page == _REVEAL_Q:
             self._vm.reveal()
+        elif page == _CONTINUE:
+            self._vm.continue_()
 
-    def _on_rating_key(self, rating: Rating) -> None:
-        if self._vm.in_progress and self._vm.revealed:
-            self._vm.answer(rating)
+    def _on_number(self, n: int) -> None:
+        page = self._footer.currentIndex()
+        if page == _REVEAL_A:
+            self._vm.answer(Rating(n))
+        elif page == _CHOOSE_Q:
+            options = self._vm.current.options if self._vm.current else ()
+            if 1 <= n <= len(options):
+                self._vm.choose(n - 1)
+
+    def _submit_reading(self) -> None:
+        self._vm.submit_reading(self._reading_input.text())
 
     # -- rendering -----------------------------------------------
 
@@ -103,7 +147,6 @@ class ReviewView(QWidget):
         self._vm.start()
 
     def refresh(self) -> None:
-        """Re-read pending counts (e.g. after kanji were added on the Browse tab)."""
         if not self._vm.in_progress:
             self._render()
 
@@ -112,12 +155,33 @@ class ReviewView(QWidget):
         self._card.show_item(item, self._vm.revealed)
 
         if item is None:
-            self._footer.setCurrentIndex(0)
+            self._footer.setCurrentIndex(_IDLE)
             self._render_idle()
             return
 
-        self._status.setText(f"{self._vm.answered} done  ·  {self._vm.remaining} left")
-        self._footer.setCurrentIndex(2 if self._vm.revealed else 1)
+        left = f"{self._vm.answered} done  ·  {self._vm.remaining} left"
+        if self._vm.revealed and self._vm.graded_correct is not None:
+            mark = "Correct" if self._vm.graded_correct else "Not quite"
+            self._status.setText(f"{mark}   —   {left}")
+        else:
+            self._status.setText(left)
+
+        self._footer.setCurrentIndex(self._page_for())
+
+    def _page_for(self) -> int:
+        if self._vm.revealed:
+            return _REVEAL_A if self._vm.input_mode == "reveal" else _CONTINUE
+        if self._vm.input_mode == "choose":
+            options = self._vm.current.options if self._vm.current else ()
+            for i, button in enumerate(self._choice_buttons):
+                button.setText(options[i] if i < len(options) else "")
+                button.setVisible(bool(button.text()))
+            return _CHOOSE_Q
+        if self._vm.input_mode == "type":
+            self._reading_input.clear()
+            self._reading_input.setFocus()
+            return _TYPE_Q
+        return _REVEAL_Q
 
     def _render_idle(self) -> None:
         pending = self._vm.pending_counts()

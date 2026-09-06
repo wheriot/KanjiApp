@@ -155,6 +155,12 @@ class KanjiRepo:
     def count(self) -> int:
         return int(self._conn.execute("SELECT COUNT(*) FROM kanji").fetchone()[0])
 
+    def sample(self, exclude_id: int, n: int) -> list[Kanji]:
+        rows = self._conn.execute(
+            "SELECT * FROM kanji WHERE id != ? ORDER BY RANDOM() LIMIT ?", (exclude_id, n)
+        ).fetchall()
+        return self._hydrate(rows)
+
     # -- hydration ------------------------------------------------------
 
     def _hydrate(self, rows: Sequence[sqlite3.Row]) -> list[Kanji]:
@@ -246,6 +252,12 @@ class VocabRepo:
 
     def count(self) -> int:
         return int(self._conn.execute("SELECT COUNT(*) FROM vocab").fetchone()[0])
+
+    def sample(self, exclude_id: int, n: int) -> list[Vocab]:
+        rows = self._conn.execute(
+            "SELECT * FROM vocab WHERE id != ? ORDER BY RANDOM() LIMIT ?", (exclude_id, n)
+        ).fetchall()
+        return self._hydrate(rows)
 
     def sentences_for(self, vocab_id: int, limit: int = 3) -> list[Sentence]:
         rows = self._conn.execute(
