@@ -27,6 +27,8 @@ class CardFace(QWidget):
         self._divider.setStyleSheet("background: palette(mid);")
         self._answer = _text(24)
         self._answer_note = _text(15, faint=True)
+        self._sentence = _text(14)
+        self._sentence.setContentsMargins(24, 8, 24, 0)
         self._stroke = StrokeOrderWidget()
 
         layout = QVBoxLayout(self)
@@ -36,12 +38,19 @@ class CardFace(QWidget):
         layout.addWidget(self._divider)
         layout.addWidget(self._answer)
         layout.addWidget(self._answer_note)
+        layout.addWidget(self._sentence)
         layout.addWidget(self._stroke, stretch=1)
         layout.addStretch(1)
 
     def show_item(self, item: ReviewItem | None, revealed: bool) -> None:
         if item is None:
-            for label in (self._prompt, self._prompt_note, self._answer, self._answer_note):
+            for label in (
+                self._prompt,
+                self._prompt_note,
+                self._answer,
+                self._answer_note,
+                self._sentence,
+            ):
                 label.clear()
             self._stroke.set_drawing(None)
             self._set_answer_visible(False)
@@ -53,18 +62,34 @@ class CardFace(QWidget):
 
         self._answer.setText(item.answer)
         self._answer_note.setText(item.answer_note)
+        self._sentence.setText(_sentence_text(item))
         self._stroke.set_drawing(item.stroke if revealed else None)
         self._set_answer_visible(
-            revealed, has_note=bool(item.answer_note), has_stroke=item.stroke is not None
+            revealed,
+            has_note=bool(item.answer_note),
+            has_stroke=item.stroke is not None,
+            has_sentence=item.sentence is not None,
         )
 
     def _set_answer_visible(
-        self, revealed: bool, *, has_note: bool = False, has_stroke: bool = False
+        self,
+        revealed: bool,
+        *,
+        has_note: bool = False,
+        has_stroke: bool = False,
+        has_sentence: bool = False,
     ) -> None:
         self._divider.setVisible(revealed)
         self._answer.setVisible(revealed)
         self._answer_note.setVisible(revealed and has_note)
+        self._sentence.setVisible(revealed and has_sentence)
         self._stroke.setVisible(revealed and has_stroke)
+
+
+def _sentence_text(item: ReviewItem) -> str:
+    if item.sentence is None:
+        return ""
+    return f"{item.sentence.japanese}\n{item.sentence.english}"
 
 
 def _text(point_size: int, *, faint: bool = False) -> QLabel:

@@ -65,10 +65,11 @@ Individual importers: `scripts.import_kanjidic`, `scripts.import_kanjivg`,
 
 ## Project status
 
-Phases 0–7 complete. Dashboard, Browse (kanji + vocabulary), Review (recognition
-+ recall, FSRS), multiple Decks, Stats, and Settings. Ships all **2136 Jōyō
-kanji** with stroke order and ~15k vocabulary entries, filterable by school grade
-and (approximate) JLPT level. See [PLAN.md](PLAN.md).
+Phases 0–7 complete, plus follow-ups. Dashboard, Browse (kanji + vocabulary),
+Review (recognition + recall, FSRS), multiple Decks, Stats, Settings. Ships all
+**2136 Jōyō kanji** with stroke order, ~15k vocabulary entries with example
+sentences, and romaji pronunciation hints. Filter by school grade / JLPT level,
+or "add the N most common" to a deck in one click. See [PLAN.md](PLAN.md).
 
 ## Data & licenses
 

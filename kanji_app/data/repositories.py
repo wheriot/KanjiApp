@@ -23,6 +23,7 @@ from kanji_app.core.models import (
     Reading,
     ReadingType,
     SchedulingState,
+    Sentence,
     SubjectType,
     Vocab,
 )
@@ -213,24 +214,21 @@ class VocabRepo:
         return self._hydrate([row])[0] if row else None
 
     def find(self, text: str = "", limit: int = 2000) -> list[Vocab]:
+        order = "ORDER BY frequency IS NULL, frequency, length(expression), expression"
         text = text.strip()
         if text:
             like = f"%{text}%"
             rows = self._conn.execute(
-                """
+                f"""
                 SELECT DISTINCT v.* FROM vocab v
                 LEFT JOIN vocab_gloss g ON g.vocab_id = v.id
                 WHERE v.expression LIKE :like OR v.kana LIKE :like OR g.value LIKE :like
-                ORDER BY length(v.expression), v.expression
-                LIMIT :limit
+                {order.replace("frequency", "v.frequency")} LIMIT :limit
                 """,
                 {"like": like, "limit": limit},
             ).fetchall()
         else:
-            rows = self._conn.execute(
-                "SELECT * FROM vocab ORDER BY length(expression), expression LIMIT ?",
-                (limit,),
-            ).fetchall()
+            rows = self._conn.execute(f"SELECT * FROM vocab {order} LIMIT ?", (limit,)).fetchall()
         return self._hydrate(rows)
 
     def for_kanji(self, kanji_id: int, limit: int = 30) -> list[Vocab]:
@@ -248,6 +246,17 @@ class VocabRepo:
 
     def count(self) -> int:
         return int(self._conn.execute("SELECT COUNT(*) FROM vocab").fetchone()[0])
+
+    def sentences_for(self, vocab_id: int, limit: int = 3) -> list[Sentence]:
+        rows = self._conn.execute(
+            """
+            SELECT s.japanese, s.english FROM sentence s
+            JOIN vocab_sentence vs ON vs.sentence_id = s.id
+            WHERE vs.vocab_id = ? ORDER BY s.length LIMIT ?
+            """,
+            (vocab_id, limit),
+        ).fetchall()
+        return [Sentence(japanese=r["japanese"], english=r["english"]) for r in rows]
 
     def _hydrate(self, rows: Sequence[sqlite3.Row]) -> list[Vocab]:
         rows = [r for r in rows if r is not None]
@@ -272,6 +281,7 @@ class VocabRepo:
                 expression=r["expression"],
                 kana=r["kana"],
                 jlpt=r["jlpt"],
+                frequency=r["frequency"],
                 glosses=tuple(glosses.get(r["id"], ())),
                 kanji_ids=tuple(links.get(r["id"], ())),
             )

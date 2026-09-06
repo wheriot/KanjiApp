@@ -16,10 +16,16 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from kanji_app.core.romaji import to_romaji
 from kanji_app.ui.view_models.vocab_vm import VocabViewModel
-from kanji_app.ui.views.bulk_add import AddAllButton
+from kanji_app.ui.views.bulk_add import AddAllButton, SmartAddControl
 
 _ID_ROLE = Qt.ItemDataRole.UserRole
+
+
+def _reading_line(kana: str) -> str:
+    roman = to_romaji(kana)
+    return f"{kana}  ({roman})" if roman and roman != kana else kana
 
 
 class VocabBrowserView(QWidget):
@@ -35,6 +41,11 @@ class VocabBrowserView(QWidget):
         self._list = QListWidget()
         self._list.currentItemChanged.connect(self._on_current_item)
         self._count = QLabel()
+        self._smart_add = SmartAddControl(
+            "words",
+            add_top_n=self._vm.add_top_n_to_deck,
+            can_add=lambda: self._vm.can_add_to_deck,
+        )
         self._add_all = AddAllButton(
             "words",
             pending=self._vm.not_in_deck_count,
@@ -45,6 +56,7 @@ class VocabBrowserView(QWidget):
         count_row = QHBoxLayout()
         count_row.addWidget(self._count)
         count_row.addStretch(1)
+        count_row.addWidget(self._smart_add)
         count_row.addWidget(self._add_all)
 
         left = QWidget()
@@ -62,6 +74,9 @@ class VocabBrowserView(QWidget):
         self._glosses.setWordWrap(True)
         self._kanji = QLabel()
         self._kanji.setWordWrap(True)
+        self._sentences = QLabel()
+        self._sentences.setWordWrap(True)
+        self._sentences.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
 
         self._add = QPushButton()
         self._add.clicked.connect(self._vm.add_selected_to_deck)
@@ -73,6 +88,7 @@ class VocabBrowserView(QWidget):
         form.addRow("Reading", self._kana)
         form.addRow("Meaning", self._glosses)
         form.addRow("Kanji", self._kanji)
+        form.addRow("Examples", self._sentences)
         form.addRow(self._add)
 
         self._placeholder = QLabel("Select a word to see its details.")
@@ -109,6 +125,7 @@ class VocabBrowserView(QWidget):
         self._list.blockSignals(False)
         self._count.setText(f"{len(self._vm.results)} words")
         self._add_all.refresh()
+        self._smart_add.refresh()
 
     def _reload_detail(self) -> None:
         vocab = self._vm.selected
@@ -118,9 +135,12 @@ class VocabBrowserView(QWidget):
         if vocab is None:
             return
         self._expression.setText(vocab.expression)
-        self._kana.setText(vocab.kana)
+        self._kana.setText(_reading_line(vocab.kana))
         self._glosses.setText("; ".join(vocab.glosses))
         self._kanji.setText(" ".join(self._kanji_literals(vocab.kanji_ids)) or "—")
+        self._sentences.setText(
+            "\n\n".join(f"{s.japanese}\n{s.english}" for s in self._vm.selected_sentences()) or "—"
+        )
         self._add.setVisible(self._vm.can_add_to_deck)
         self._add.setEnabled(self._vm.can_add_to_deck and not self._vm.selected_in_deck)
         self._add.setText("In study deck ✓" if self._vm.selected_in_deck else "Add to study deck")

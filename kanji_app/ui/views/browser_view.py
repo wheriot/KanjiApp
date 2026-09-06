@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from kanji_app.ui.view_models.catalog_vm import CatalogViewModel
-from kanji_app.ui.views.bulk_add import AddAllButton
+from kanji_app.ui.views.bulk_add import AddAllButton, SmartAddControl
 from kanji_app.ui.views.kanji_detail_panel import KanjiDetailPanel
 
 _ID_ROLE = Qt.ItemDataRole.UserRole
@@ -60,6 +60,11 @@ class BrowserView(QWidget):
         self._grid.currentItemChanged.connect(self._on_current_item)
 
         self._count = QLabel()
+        self._smart_add = SmartAddControl(
+            "kanji",
+            add_top_n=self._vm.add_top_n_to_deck,
+            can_add=lambda: self._vm.can_add_to_deck,
+        )
         self._add_all = AddAllButton(
             "kanji",
             pending=self._vm.not_in_deck_count,
@@ -70,6 +75,7 @@ class BrowserView(QWidget):
         count_row = QHBoxLayout()
         count_row.addWidget(self._count)
         count_row.addStretch(1)
+        count_row.addWidget(self._smart_add)
         count_row.addWidget(self._add_all)
 
         left = QWidget()
@@ -110,9 +116,10 @@ class BrowserView(QWidget):
         self._grid.blockSignals(False)
         self._count.setText(f"{len(self._vm.results)} kanji")
         self._add_all.refresh()
+        self._smart_add.refresh()
 
     def _reload_detail(self) -> None:
-        self._detail.show_kanji(self._vm.selected, self._vm.drawing)
+        self._detail.show_kanji(self._vm.selected, self._vm.drawing, self._vm.selected_words())
         self._detail.set_deck_state(
             can_add=self._vm.can_add_to_deck,
             in_deck=self._vm.selected_in_deck,

@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from kanji_app.config import BUNDLED_DB
 from kanji_app.core.kanjivg import StrokeDrawing
 from kanji_app.core.kanjivg import parse as parse_kanjivg
-from kanji_app.core.models import Kanji, Vocab
+from kanji_app.core.models import Kanji, Sentence, Vocab
 from kanji_app.data import db
 from kanji_app.data.repositories import KanjiRepo, VocabRepo
 
@@ -80,6 +80,9 @@ class KanjiCatalog:
 
     def vocab_for_kanji(self, kanji_id: int) -> list[Vocab]:
         return self._vocab.for_kanji(kanji_id)
+
+    def vocab_sentences(self, vocab_id: int, limit: int = 3) -> list[Sentence]:
+        return self._vocab.sentences_for(vocab_id, limit)
 
     def vocab_total(self) -> int:
         return self._vocab.count()

@@ -15,6 +15,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import re
 import sqlite3
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -53,12 +54,24 @@ def import_jmdict(
 
 
 class _Entry:
-    __slots__ = ("expression", "glosses", "kana")
+    __slots__ = ("expression", "frequency", "glosses", "kana")
 
-    def __init__(self, expression: str, kana: str, glosses: list[str]) -> None:
+    def __init__(
+        self, expression: str, kana: str, glosses: list[str], frequency: int | None
+    ) -> None:
         self.expression = expression
         self.kana = kana
         self.glosses = glosses
+        self.frequency = frequency
+
+
+_NF = re.compile(r"^nf(\d\d)$")
+
+
+def _frequency_rank(priorities: set[str | None]) -> int | None:
+    """JMdict 'nfNN' = the NNth band of 500 words; use its mid-point as a rank."""
+    bands = [int(m.group(1)) for p in priorities if p and (m := _NF.match(p))]
+    return (min(bands) - 1) * 500 + 250 if bands else None
 
 
 def _parse_entry(entry: ET.Element, charset: set[str]) -> _Entry | None:
@@ -69,6 +82,7 @@ def _parse_entry(entry: ET.Element, charset: set[str]) -> _Entry | None:
     priorities = {p.text for p in k_eles[0].findall("ke_pri")}
     if priorities.isdisjoint(_COMMON_PRIORITIES):
         return None
+    priorities |= {p.text for r in entry.findall("r_ele") for p in r.findall("re_pri")}
 
     kanji_chars = [c for c in keb if _is_kanji(c)]
     if not kanji_chars or any(c not in charset for c in kanji_chars):
@@ -88,13 +102,13 @@ def _parse_entry(entry: ET.Element, charset: set[str]) -> _Entry | None:
     if not glosses or not reb:
         return None
 
-    return _Entry(expression=keb, kana=reb, glosses=glosses)
+    return _Entry(expression=keb, kana=reb, glosses=glosses, frequency=_frequency_rank(priorities))
 
 
 def _insert(conn: sqlite3.Connection, entry: _Entry, kanji_ids: dict[str, int]) -> None:
     cursor = conn.execute(
-        "INSERT INTO vocab (expression, kana) VALUES (?, ?)",
-        (entry.expression, entry.kana),
+        "INSERT INTO vocab (expression, kana, frequency) VALUES (?, ?, ?)",
+        (entry.expression, entry.kana, entry.frequency),
     )
     vocab_id = cursor.lastrowid
     conn.executemany(

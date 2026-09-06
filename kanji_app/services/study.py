@@ -27,10 +27,12 @@ from kanji_app.core.models import (
     Kanji,
     Rating,
     ReadingType,
+    Sentence,
     SubjectType,
     Vocab,
 )
 from kanji_app.core.review_session import DeckCounts
+from kanji_app.core.romaji import to_romaji
 from kanji_app.core.srs import FsrsScheduler, Scheduler
 from kanji_app.data import db
 from kanji_app.data.repositories import CardRepo, DeckRepo, KanjiRepo, ReviewLogRepo, VocabRepo
@@ -54,6 +56,7 @@ class ReviewItem:
     answer: str
     answer_note: str
     stroke: StrokeDrawing | None = None
+    sentence: Sentence | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -251,7 +254,10 @@ class StudyService:
             kanji = self._kanji.get(card.subject_id)
             return _kanji_item(card, kanji, self._stroke_drawing(kanji)) if kanji else None
         vocab = self._vocab.get(card.subject_id)
-        return _vocab_item(card, vocab) if vocab else None
+        if vocab is None:
+            return None
+        sentences = self._vocab.sentences_for(card.subject_id, limit=1)
+        return _vocab_item(card, vocab, sentences[0] if sentences else None)
 
     def _stroke_drawing(self, kanji: Kanji) -> StrokeDrawing | None:
         svg = self._kanji.stroke_svg(kanji.id)
@@ -266,10 +272,15 @@ class StudyService:
         self._reference.close()
 
 
+def _with_romaji(reading: str) -> str:
+    roman = to_romaji(reading)
+    return f"{reading} ({roman})" if roman and roman != reading else reading
+
+
 def _readings(kanji: Kanji) -> str:
-    on = "、".join(kanji.readings_of(ReadingType.ON))
-    kun = "、".join(kanji.readings_of(ReadingType.KUN))
-    return "  /  ".join(p for p in (on, kun) if p)
+    on = "、".join(_with_romaji(r) for r in kanji.readings_of(ReadingType.ON))
+    kun = "、".join(_with_romaji(r) for r in kanji.readings_of(ReadingType.KUN))
+    return "   /   ".join(p for p in (on, kun) if p)
 
 
 def _kanji_item(card: Card, kanji: Kanji, stroke: StrokeDrawing | None) -> ReviewItem:
@@ -294,22 +305,25 @@ def _kanji_item(card: Card, kanji: Kanji, stroke: StrokeDrawing | None) -> Revie
     )
 
 
-def _vocab_item(card: Card, vocab: Vocab) -> ReviewItem:
+def _vocab_item(card: Card, vocab: Vocab, sentence: Sentence | None) -> ReviewItem:
     glosses = ", ".join(vocab.glosses)
+    reading = _with_romaji(vocab.kana)
     if card.mode == CardMode.RECALL:
         return ReviewItem(
             card=card,
             prompt=glosses,
             prompt_note="",
             answer=vocab.expression,
-            answer_note=vocab.kana,
+            answer_note=reading,
+            sentence=sentence,
         )
     return ReviewItem(
         card=card,
         prompt=vocab.expression,
         prompt_note="",
         answer=glosses,
-        answer_note=vocab.kana,
+        answer_note=reading,
+        sentence=sentence,
     )
 
 

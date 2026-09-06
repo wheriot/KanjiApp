@@ -106,7 +106,14 @@ class Vocab:
     kana: str
     glosses: tuple[str, ...] = ()
     jlpt: int | None = None
+    frequency: int | None = None
     kanji_ids: tuple[int, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class Sentence:
+    japanese: str
+    english: str
 
 
 @dataclass(frozen=True, slots=True)
