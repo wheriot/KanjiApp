@@ -37,8 +37,9 @@ def _reset_db(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
 
 
-def _apply_jlpt_levels(conn: sqlite3.Connection) -> None:
-    """Tag kanji from jlpt/n{1..5}.txt (easier level wins on overlap), then vocab."""
+def _apply_levels(conn: sqlite3.Connection) -> None:
+    """Tag kanji JLPT from jlpt/n{1..5}.txt (easier level wins on overlap), then
+    derive each vocab entry's level and grade from its component kanji."""
     with db.transaction(conn):
         for level in (1, 2, 3, 4, 5):
             path = CHARSET_DIR / f"n{level}.txt"
@@ -49,11 +50,15 @@ def _apply_jlpt_levels(conn: sqlite3.Connection) -> None:
                 )
         conn.execute(
             """
-            UPDATE vocab SET jlpt = (
-                SELECT MIN(k.jlpt) FROM vocab_kanji vk
-                JOIN kanji k ON k.id = vk.kanji_id
-                WHERE vk.vocab_id = vocab.id AND k.jlpt IS NOT NULL
-            )
+            UPDATE vocab SET
+                jlpt = (
+                    SELECT MIN(k.jlpt) FROM vocab_kanji vk JOIN kanji k ON k.id = vk.kanji_id
+                    WHERE vk.vocab_id = vocab.id AND k.jlpt IS NOT NULL
+                ),
+                grade = (
+                    SELECT MAX(k.grade) FROM vocab_kanji vk JOIN kanji k ON k.id = vk.kanji_id
+                    WHERE vk.vocab_id = vocab.id AND k.grade IS NOT NULL
+                )
             """
         )
 
@@ -95,8 +100,8 @@ def main() -> int:
         print("importing example sentences...")
         n_sentences, _links = import_tatoeba(resolve_tatoeba(args.tatoeba), conn, charset)
 
-    print("applying JLPT levels...")
-    _apply_jlpt_levels(conn)
+    print("applying JLPT + grade levels...")
+    _apply_levels(conn)
 
     # Ship a compact, single-file database (no WAL sidecars).
     conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")

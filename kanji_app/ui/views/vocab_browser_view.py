@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QComboBox,
     QFormLayout,
     QHBoxLayout,
     QLabel,
@@ -16,11 +17,31 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from kanji_app.core.models import Vocab
 from kanji_app.core.romaji import to_romaji
 from kanji_app.ui.view_models.vocab_vm import VocabViewModel
 from kanji_app.ui.views.bulk_add import AddAllButton, SmartAddControl
 
 _ID_ROLE = Qt.ItemDataRole.UserRole
+
+
+def _combo(any_label: str, values: list[int], fmt: str) -> QComboBox:
+    combo = QComboBox()
+    combo.addItem(f"Any {any_label}", None)
+    for value in values:
+        combo.addItem(fmt.format(value), value)
+    return combo
+
+
+def _info_line(vocab: Vocab) -> str:
+    bits: list[str] = []
+    if vocab.jlpt is not None:
+        bits.append(f"JLPT N{vocab.jlpt}")
+    if vocab.grade is not None:
+        bits.append("secondary school" if vocab.grade == 8 else f"grade {vocab.grade}")
+    if vocab.frequency is not None:
+        bits.append(f"freq #{vocab.frequency}")
+    return " · ".join(bits) or "—"
 
 
 def _reading_line(kana: str) -> str:
@@ -37,6 +58,19 @@ class VocabBrowserView(QWidget):
         self._search.setPlaceholderText("Search word, reading, or meaning…")
         self._search.setClearButtonEnabled(True)
         self._search.textChanged.connect(self._vm.set_text)
+
+        options = vm.filter_options()
+        self._jlpt = _combo("JLPT", options.jlpt, "N{}")
+        self._jlpt.currentIndexChanged.connect(lambda: self._vm.set_jlpt(self._jlpt.currentData()))
+        self._grade = _combo("grade", options.grade, "Grade {}")
+        self._grade.currentIndexChanged.connect(
+            lambda: self._vm.set_grade(self._grade.currentData())
+        )
+
+        filters = QHBoxLayout()
+        filters.addWidget(self._search, stretch=1)
+        filters.addWidget(self._jlpt)
+        filters.addWidget(self._grade)
 
         self._list = QListWidget()
         self._list.currentItemChanged.connect(self._on_current_item)
@@ -61,7 +95,7 @@ class VocabBrowserView(QWidget):
 
         left = QWidget()
         left_layout = QVBoxLayout(left)
-        left_layout.addWidget(self._search)
+        left_layout.addLayout(filters)
         left_layout.addWidget(self._list, stretch=1)
         left_layout.addLayout(count_row)
 
@@ -72,6 +106,7 @@ class VocabBrowserView(QWidget):
         self._kana = QLabel()
         self._glosses = QLabel()
         self._glosses.setWordWrap(True)
+        self._info = QLabel()
         self._kanji = QLabel()
         self._kanji.setWordWrap(True)
         self._sentences = QLabel()
@@ -87,6 +122,7 @@ class VocabBrowserView(QWidget):
         form.addRow(self._expression)
         form.addRow("Reading", self._kana)
         form.addRow("Meaning", self._glosses)
+        form.addRow("Info", self._info)
         form.addRow("Kanji", self._kanji)
         form.addRow("Examples", self._sentences)
         form.addRow(self._add)
@@ -137,6 +173,7 @@ class VocabBrowserView(QWidget):
         self._expression.setText(vocab.expression)
         self._kana.setText(_reading_line(vocab.kana))
         self._glosses.setText("; ".join(vocab.glosses))
+        self._info.setText(_info_line(vocab))
         self._kanji.setText(" ".join(self._kanji_literals(vocab.kanji_ids)) or "—")
         self._sentences.setText(
             "\n\n".join(f"{s.japanese}\n{s.english}" for s in self._vm.selected_sentences()) or "—"

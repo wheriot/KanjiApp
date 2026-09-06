@@ -106,6 +106,7 @@ class Vocab:
     kana: str
     glosses: tuple[str, ...] = ()
     jlpt: int | None = None
+    grade: int | None = None
     frequency: int | None = None
     kanji_ids: tuple[int, ...] = ()
 

@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from dataclasses import replace
 
 from PySide6.QtCore import QObject, Signal
 
 from kanji_app.core.models import Sentence, Vocab
-from kanji_app.services.catalog import KanjiCatalog
+from kanji_app.services.catalog import FilterOptions, KanjiCatalog, VocabFilter
 from kanji_app.services.study import StudyService
 
 
@@ -26,10 +27,13 @@ class VocabViewModel(QObject):
         self._catalog = catalog
         self._study = study
         self._deck_id = deck_id
-        self._text = ""
+        self._filter = VocabFilter()
         self._results: list[Vocab] = []
         self._selected: Vocab | None = None
         self.refresh()
+
+    def filter_options(self) -> FilterOptions:
+        return self._catalog.vocab_filter_options()
 
     @property
     def results(self) -> list[Vocab]:
@@ -59,8 +63,17 @@ class VocabViewModel(QObject):
         return self._catalog.vocab_sentences(self._selected.id)
 
     def set_text(self, text: str) -> None:
-        if text != self._text:
-            self._text = text
+        self._apply(replace(self._filter, text=text))
+
+    def set_jlpt(self, jlpt: int | None) -> None:
+        self._apply(replace(self._filter, jlpt=jlpt))
+
+    def set_grade(self, grade: int | None) -> None:
+        self._apply(replace(self._filter, grade=grade))
+
+    def _apply(self, updated: VocabFilter) -> None:
+        if updated != self._filter:
+            self._filter = updated
             self.refresh()
 
     def select(self, vocab_id: int | None) -> None:
@@ -116,7 +129,7 @@ class VocabViewModel(QObject):
         return len(pending)
 
     def refresh(self) -> None:
-        self._results = self._catalog.browse_vocab(self._text)
+        self._results = self._catalog.browse_vocab(self._filter)
         self.results_changed.emit()
         if self._selected and all(v.id != self._selected.id for v in self._results):
             self.select(None)

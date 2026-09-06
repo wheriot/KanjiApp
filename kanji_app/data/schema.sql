@@ -54,9 +54,12 @@ CREATE TABLE IF NOT EXISTS vocab (
     id         INTEGER PRIMARY KEY,
     expression TEXT    NOT NULL,
     kana       TEXT    NOT NULL,
-    jlpt       INTEGER,
-    frequency  INTEGER   -- coarse rank from JMdict 'nfXX' bands (1 = most common)
+    jlpt       INTEGER,   -- level of the word's hardest component kanji
+    grade      INTEGER,   -- latest school grade among the word's component kanji
+    frequency  INTEGER    -- coarse rank from JMdict 'nfXX' bands (1 = most common)
 );
+CREATE INDEX IF NOT EXISTS idx_vocab_jlpt ON vocab(jlpt);
+CREATE INDEX IF NOT EXISTS idx_vocab_grade ON vocab(grade);
 
 CREATE TABLE IF NOT EXISTS vocab_gloss (
     id       INTEGER PRIMARY KEY,

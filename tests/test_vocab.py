@@ -17,10 +17,10 @@ NOON = datetime(2026, 8, 1, 12, 0, tzinfo=UTC)
 def vocab_db(kanji_db: sqlite3.Connection) -> sqlite3.Connection:
     kanji_db.executescript(
         """
-        INSERT INTO vocab (id, expression, kana, jlpt) VALUES
-            (1, '水', 'みず', 5),
-            (2, '山川', 'やまかわ', 5),
-            (3, '一人', 'ひとり', 5);
+        INSERT INTO vocab (id, expression, kana, jlpt, grade) VALUES
+            (1, '水', 'みず', 5, 1),
+            (2, '山川', 'やまかわ', 5, 2),
+            (3, '一人', 'ひとり', 5, 1);
         INSERT INTO vocab_gloss (vocab_id, value) VALUES
             (1, 'water'),
             (2, 'mountains and rivers'),
@@ -36,12 +36,27 @@ def test_vocab_repo_find_and_hydrate(vocab_db: sqlite3.Connection) -> None:
     repo = VocabRepo(vocab_db)
     assert repo.count() == 3
 
-    hitori = repo.find("alone")[0]
+    hitori = repo.find(text="alone")[0]
     assert hitori.expression == "一人"
     assert hitori.glosses == ("one person", "alone")
     assert 3 in hitori.kanji_ids
 
-    assert [v.expression for v in repo.find("やまかわ")] == ["山川"]
+    assert [v.expression for v in repo.find(text="やまかわ")] == ["山川"]
+
+
+def test_vocab_repo_filters_by_jlpt_and_grade(vocab_db: sqlite3.Connection) -> None:
+    repo = VocabRepo(vocab_db)
+    assert {v.expression for v in repo.find(grade=1)} == {"水", "一人"}
+    assert [v.expression for v in repo.find(grade=2)] == ["山川"]
+    assert [v.expression for v in repo.find(jlpt=5, grade=2)] == ["山川"]
+    assert repo.distinct_values("grade") == [1, 2]
+    assert repo.distinct_values("jlpt") == [5]
+
+
+def test_vocab_carries_grade(vocab_db: sqlite3.Connection) -> None:
+    (word,) = VocabRepo(vocab_db).find(text="山川")
+    assert word.grade == 2
+    assert word.jlpt == 5
 
 
 def test_vocab_for_kanji(vocab_db: sqlite3.Connection) -> None:
