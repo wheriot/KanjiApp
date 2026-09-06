@@ -219,23 +219,47 @@ class VocabRepo:
         row = self._conn.execute("SELECT * FROM vocab WHERE id = ?", (vocab_id,)).fetchone()
         return self._hydrate([row])[0] if row else None
 
-    def find(self, text: str = "", limit: int = 2000) -> list[Vocab]:
-        order = "ORDER BY frequency IS NULL, frequency, length(expression), expression"
+    def find(
+        self,
+        *,
+        text: str = "",
+        jlpt: int | None = None,
+        grade: int | None = None,
+        limit: int = 2000,
+    ) -> list[Vocab]:
+        conditions: list[str] = []
+        params: dict[str, object] = {"limit": limit}
         text = text.strip()
         if text:
-            like = f"%{text}%"
-            rows = self._conn.execute(
-                f"""
-                SELECT DISTINCT v.* FROM vocab v
-                LEFT JOIN vocab_gloss g ON g.vocab_id = v.id
-                WHERE v.expression LIKE :like OR v.kana LIKE :like OR g.value LIKE :like
-                {order.replace("frequency", "v.frequency")} LIMIT :limit
-                """,
-                {"like": like, "limit": limit},
-            ).fetchall()
-        else:
-            rows = self._conn.execute(f"SELECT * FROM vocab {order} LIMIT ?", (limit,)).fetchall()
+            conditions.append(
+                "(v.expression LIKE :like OR v.kana LIKE :like"
+                " OR EXISTS (SELECT 1 FROM vocab_gloss g WHERE g.vocab_id = v.id"
+                "            AND g.value LIKE :like))"
+            )
+            params["like"] = f"%{text}%"
+        if jlpt is not None:
+            conditions.append("v.jlpt = :jlpt")
+            params["jlpt"] = jlpt
+        if grade is not None:
+            conditions.append("v.grade = :grade")
+            params["grade"] = grade
+
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        rows = self._conn.execute(
+            f"SELECT v.* FROM vocab v {where} "
+            "ORDER BY v.frequency IS NULL, v.frequency, length(v.expression), v.expression "
+            "LIMIT :limit",
+            params,
+        ).fetchall()
         return self._hydrate(rows)
+
+    def distinct_values(self, column: str) -> list[int]:
+        if column not in {"jlpt", "grade"}:
+            raise ValueError(f"not a filterable vocab column: {column}")
+        rows = self._conn.execute(
+            f"SELECT DISTINCT {column} AS v FROM vocab WHERE {column} IS NOT NULL ORDER BY v"
+        ).fetchall()
+        return [int(r["v"]) for r in rows]
 
     def for_kanji(self, kanji_id: int, limit: int = 30) -> list[Vocab]:
         rows = self._conn.execute(
@@ -293,6 +317,7 @@ class VocabRepo:
                 expression=r["expression"],
                 kana=r["kana"],
                 jlpt=r["jlpt"],
+                grade=r["grade"],
                 frequency=r["frequency"],
                 glosses=tuple(glosses.get(r["id"], ())),
                 kanji_ids=tuple(links.get(r["id"], ())),

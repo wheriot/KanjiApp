@@ -202,6 +202,11 @@ README.md
 - Distractors sampled from `KanjiRepo.sample` / `VocabRepo.sample`; typed answers checked via `core/romaji.to_kana` + kana normalisation
 - `ReviewViewModel` gains `choose` / `submit_reading` / `continue_`; `ReviewView` footer is a 6-page stack keyed on `(input_mode, phase)`
 
+### Post-roadmap — daily-limit clarity + vocab grade/JLPT ✅
+- `TodaySummary` now reports limit-adjusted counts + `capped_new`/`capped_due`/`next_due`; the Review idle screen explains "daily limit reached — raise it on the Decks screen" instead of a dead Start button
+- `vocab.grade` (latest school grade among the word's kanji) + surfaced `vocab.jlpt`; Vocabulary tab gets JLPT/grade filters and an Info line
+- `db.migrate` ALTERs in newly-added columns, so a stale bundled `kanji.db` degrades gracefully instead of crashing
+
 ### Later / optional
 - Tatoeba example sentences on the vocab detail + review screens
 - Frozen/standalone build (PyInstaller) — only if the audience ever grows beyond Python users

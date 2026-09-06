@@ -19,7 +19,7 @@ from PySide6.QtCore import QObject, Signal
 from kanji_app.core.models import Rating
 from kanji_app.core.review_session import DeckCounts
 from kanji_app.core.romaji import to_kana
-from kanji_app.services.study import ReviewItem, StudyService
+from kanji_app.services.study import ReviewItem, StudyService, TodaySummary
 
 
 class ReviewViewModel(QObject):
@@ -67,6 +67,9 @@ class ReviewViewModel(QObject):
 
     def pending_counts(self) -> DeckCounts:
         return self._study.deck_counts(self._deck_id)
+
+    def today_summary(self) -> TodaySummary:
+        return self._study.today_summary(self._deck_id)
 
     # -- commands -------------------------------------------------
 

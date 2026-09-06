@@ -7,7 +7,7 @@ UI needs, without the UI touching ``data`` or SQL directly.
 from __future__ import annotations
 
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from kanji_app.config import BUNDLED_DB
 from kanji_app.core.kanjivg import StrokeDrawing
@@ -28,12 +28,21 @@ class KanjiFilter:
 
 
 @dataclass(frozen=True, slots=True)
+class VocabFilter:
+    """A vocabulary browser filter. Empty/``None`` fields are ignored."""
+
+    text: str = ""
+    jlpt: int | None = None
+    grade: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class FilterOptions:
     """Values available to populate the filter controls."""
 
     jlpt: list[int]
     grade: list[int]
-    stroke_count: list[int]
+    stroke_count: list[int] = field(default_factory=list)
 
 
 class KanjiCatalog:
@@ -72,8 +81,15 @@ class KanjiCatalog:
 
     # -- vocab ------------------------------------------------------
 
-    def browse_vocab(self, text: str = "", limit: int = 2000) -> list[Vocab]:
-        return self._vocab.find(text=text, limit=limit)
+    def browse_vocab(self, flt: VocabFilter | None = None, limit: int = 2000) -> list[Vocab]:
+        flt = flt or VocabFilter()
+        return self._vocab.find(text=flt.text, jlpt=flt.jlpt, grade=flt.grade, limit=limit)
+
+    def vocab_filter_options(self) -> FilterOptions:
+        return FilterOptions(
+            jlpt=self._vocab.distinct_values("jlpt"),
+            grade=self._vocab.distinct_values("grade"),
+        )
 
     def get_vocab(self, vocab_id: int) -> Vocab | None:
         return self._vocab.get(vocab_id)
