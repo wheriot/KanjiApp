@@ -28,6 +28,25 @@ def test_idle_state_offers_start_when_cards_waiting(study_service: StudyService)
     assert "new card" in view._idle_label.text()
 
 
+def test_idle_state_explains_the_daily_limit(study_service: StudyService) -> None:
+    deck = study_service.default_deck()
+    study_service.update_deck(deck.id, new_per_day=2)
+    for kid in range(1, 6):  # 5 kanji added, only 2 can start today
+        study_service.add_kanji(deck.id, kid)
+    build_app([])
+    view = ReviewView(ReviewViewModel(study_service, deck.id))
+
+    view._vm.start()
+    for _ in range(4):  # answer the 2 kanji's 2 cards each
+        view._vm.reveal()
+        view._vm.answer(Rating.GOOD)
+
+    text = view._idle_label.text()
+    assert "Daily limit reached" in text
+    assert "held back" in text
+    assert view._start_button.isHidden()
+
+
 def test_flow_reveal_and_rate(study_service: StudyService) -> None:
     view = _view(study_service, with_kanji=1)
     view._vm.start()

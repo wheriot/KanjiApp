@@ -45,6 +45,10 @@ class DashboardViewModel(QObject):
     def has_work(self) -> bool:
         return self._summary.waiting > 0
 
+    @property
+    def limit_reached(self) -> bool:
+        return self._summary.limit_reached
+
     def set_deck(self, deck_id: int) -> None:
         self._deck_id = deck_id
         self.refresh()

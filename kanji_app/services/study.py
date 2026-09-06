@@ -24,6 +24,7 @@ from kanji_app.core.kanjivg import parse as parse_kanjivg
 from kanji_app.core.models import (
     Card,
     CardMode,
+    CardState,
     Deck,
     Kanji,
     Rating,
@@ -67,15 +68,23 @@ class ReviewItem:
 
 @dataclass(frozen=True, slots=True)
 class TodaySummary:
-    """What the dashboard shows: work waiting and work already done today."""
+    """Today's study state for a deck, after the deck's daily limits are applied."""
 
-    due: int
-    new_available: int
+    due: int  # reviews you can do right now
+    new_available: int  # new cards you can start right now
     reviewed_today: int
+    new_today: int = 0  # new cards already introduced today
+    capped_new: int = 0  # further new cards the daily limit is holding back
+    capped_due: int = 0  # further due reviews the daily limit is holding back
+    next_due: datetime | None = None  # when the next scheduled card comes due
 
     @property
     def waiting(self) -> int:
         return self.due + self.new_available
+
+    @property
+    def limit_reached(self) -> bool:
+        return self.waiting == 0 and (self.capped_new > 0 or self.capped_due > 0)
 
 
 class StudyService:
@@ -215,15 +224,29 @@ class StudyService:
     def today_summary(self, deck_id: int, now: datetime | None = None) -> TodaySummary:
         moment = now or datetime.now(UTC)
         deck = self._decks.get(deck_id)
-        raw = review_session.counts(self._cards.for_deck(deck_id), moment)
+        cards = self._cards.for_deck(deck_id)
+        raw = review_session.counts(cards, moment)
         if deck is None:
             return TodaySummary(due=raw.due, new_available=raw.new, reviewed_today=0)
+
         since = review_session.day_start(moment)
-        new_done = self._log.count_new_since(deck_id, since)
+        new_today = self._log.count_new_since(deck_id, since)
+        reviewed_today = self._log.count_since(deck_id, since)
+        due_now = max(0, min(raw.due, deck.reviews_per_day - reviewed_today))
+        new_now = max(0, min(raw.new, deck.new_per_day - new_today))
+        upcoming = [
+            c.scheduling.due
+            for c in cards
+            if c.scheduling.state != CardState.NEW and c.scheduling.due > moment
+        ]
         return TodaySummary(
-            due=raw.due,
-            new_available=max(0, min(raw.new, deck.new_per_day - new_done)),
-            reviewed_today=self._log.count_since(deck_id, since),
+            due=due_now,
+            new_available=new_now,
+            reviewed_today=reviewed_today,
+            new_today=new_today,
+            capped_new=raw.new - new_now,
+            capped_due=raw.due - due_now,
+            next_due=min(upcoming, default=None),
         )
 
     def start_session(self, deck_id: int, now: datetime | None = None) -> list[ReviewItem]:

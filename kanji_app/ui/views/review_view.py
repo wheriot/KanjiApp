@@ -7,6 +7,8 @@ switched by ``(input_mode, phase)``.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
@@ -184,25 +186,54 @@ class ReviewView(QWidget):
         return _REVEAL_Q
 
     def _render_idle(self) -> None:
-        pending = self._vm.pending_counts()
-        if self._vm.answered > 0 and pending.total == 0:
-            self._status.setText("Session complete")
-            self._idle_label.setText(f"All done — {self._vm.answered} cards reviewed. 🎉")
-            self._start_button.setVisible(False)
+        summary = self._vm.today_summary()
+        self._status.setText("Review")
+
+        if summary.waiting > 0:
+            self._start_button.setVisible(True)
+            self._idle_label.setText(
+                f"{summary.due} review{_s(summary.due)} and "
+                f"{summary.new_available} new card{_s(summary.new_available)} ready."
+            )
             return
 
-        self._status.setText("Review")
-        self._start_button.setVisible(pending.total > 0)
-        if pending.total == 0:
+        self._start_button.setVisible(False)
+
+        if summary.limit_reached:
+            held = []
+            if summary.capped_new:
+                held.append(f"{summary.capped_new} new")
+            if summary.capped_due:
+                held.append(f"{summary.capped_due} due")
             self._idle_label.setText(
-                "Nothing due right now.\nAdd kanji from the Browse tab to build your deck."
+                f"Daily limit reached — {summary.reviewed_today} "
+                f"card{_s(summary.reviewed_today)} studied today.\n"
+                f"{' and '.join(held)} held back for tomorrow. "
+                "Raise the limit on the Decks screen to keep going."
             )
+        elif self._vm.answered > 0:
+            self._status.setText("Session complete")
+            self._idle_label.setText(f"All done — {self._vm.answered} cards reviewed. 🎉")
+        elif summary.next_due is not None:
+            self._idle_label.setText(f"All caught up. Next review {_relative(summary.next_due)}.")
         else:
             self._idle_label.setText(
-                f"{pending.due} review{_s(pending.due)} and "
-                f"{pending.new} new card{_s(pending.new)} waiting."
+                "Nothing due yet.\nAdd kanji or vocab from the Browse tab to build your deck."
             )
 
 
 def _s(n: int) -> str:
     return "" if n == 1 else "s"
+
+
+def _relative(when: datetime) -> str:
+    seconds = (when - datetime.now(UTC)).total_seconds()
+    if seconds <= 90:
+        return "in a moment"
+    minutes = seconds / 60
+    if minutes < 90:
+        return f"in about {round(minutes)} minutes"
+    hours = minutes / 60
+    if hours < 36:
+        return f"in about {round(hours)} hours"
+    return f"in about {round(hours / 24)} days"

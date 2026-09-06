@@ -62,9 +62,12 @@ class DashboardView(QWidget):
         self._streak.set_value(self._vm.streak_days)
 
         self._start.setEnabled(self._vm.has_work)
-        self._start.setText(
-            "Start studying" if self._vm.has_work else "Nothing due — add kanji from Browse"
-        )
+        if self._vm.has_work:
+            self._start.setText("Start studying")
+        elif self._vm.limit_reached:
+            self._start.setText("Daily limit reached — raise it on the Decks screen")
+        else:
+            self._start.setText("Nothing due — add kanji from Browse")
 
 
 class _StatTile(QFrame):
