@@ -428,6 +428,15 @@ class CardRepo:
         ).fetchall()
         return {CardMode(r["mode"]) for r in rows}
 
+    def subjects_in_deck(self, deck_id: int, subject_type: SubjectType, exclude: int) -> list[int]:
+        """Distinct subject ids of one type in a deck, minus ``exclude``."""
+        rows = self._conn.execute(
+            "SELECT DISTINCT subject_id FROM card "
+            "WHERE deck_id = ? AND subject_type = ? AND subject_id != ?",
+            (deck_id, subject_type.value, exclude),
+        ).fetchall()
+        return [int(r["subject_id"]) for r in rows]
+
     def create(
         self,
         deck_id: int,

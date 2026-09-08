@@ -303,23 +303,39 @@ class StudyService:
 
     def _build_choices(self, item: ReviewItem) -> tuple[tuple[str, ...], int]:
         recall = item.card.mode == CardMode.RECALL
-        if item.card.subject_type == SubjectType.KANJI:
-            others = self._kanji.sample(item.card.subject_id, 4)
-            distractors = [
-                k.literal if recall else ", ".join(m.value for m in k.meanings[:2]) for k in others
-            ]
+        subject_type = item.card.subject_type
+        subject_id = item.card.subject_id
+
+        # Distractors come from other cards in the same deck first — random
+        # entries from the whole dictionary are only a top-up when the deck is
+        # still too small to fill four options.
+        candidates = self._cards.subjects_in_deck(item.card.deck_id, subject_type, subject_id)
+        random.shuffle(candidates)
+        if subject_type == SubjectType.KANJI:
+            candidates += [k.id for k in self._kanji.sample(subject_id, 6)]
         else:
-            vocab_others = self._vocab.sample(item.card.subject_id, 4)
-            distractors = [
-                v.expression if recall else ", ".join(v.glosses[:2]) for v in vocab_others
-            ]
+            candidates += [v.id for v in self._vocab.sample(subject_id, 6)]
 
         pool = [item.answer]
-        for text in distractors:
-            if text and text not in pool and len(pool) < 4:
+        for candidate_id in candidates:
+            text = self._choice_text(subject_type, candidate_id, recall=recall)
+            if text and text not in pool:
                 pool.append(text)
+            if len(pool) == 4:
+                break
         random.shuffle(pool)
         return tuple(pool), pool.index(item.answer)
+
+    def _choice_text(self, subject_type: SubjectType, subject_id: int, *, recall: bool) -> str:
+        if subject_type == SubjectType.KANJI:
+            kanji = self._kanji.get(subject_id)
+            if kanji is None:
+                return ""
+            return kanji.literal if recall else ", ".join(m.value for m in kanji.meanings[:2])
+        vocab = self._vocab.get(subject_id)
+        if vocab is None:
+            return ""
+        return vocab.expression if recall else ", ".join(vocab.glosses[:2])
 
     def _accepted_readings(self, item: ReviewItem) -> tuple[str, ...]:
         if item.card.subject_type == SubjectType.KANJI:

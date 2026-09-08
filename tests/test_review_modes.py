@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from kanji_app.core.models import CardMode
 from kanji_app.core.romaji import to_romaji
 from kanji_app.data.repositories import KanjiRepo
 from kanji_app.services.settings import AppSettings
@@ -30,6 +31,25 @@ def test_choose_mode_builds_four_options_including_the_answer(
     assert item is not None
     assert len(item.options) == 4
     assert item.options[item.correct_option] == item.answer
+
+
+def test_choose_distractors_come_from_the_deck_once_it_is_big_enough(
+    study_service: StudyService, reference_repo: KanjiRepo
+) -> None:
+    study_service.update_settings(AppSettings(review_input="choose"))
+    deck_id = _deck_with_kanji(study_service, reference_repo, 8)
+    literals_in_deck = {k.literal for k in reference_repo.find(jlpt=5)[:8]}
+
+    vm = ReviewViewModel(study_service, deck_id)
+    vm.start(NOON)
+    checked = 0
+    while (item := vm.current) is not None:
+        if item.card.mode == CardMode.RECALL:  # options are kanji literals
+            assert set(item.options) <= literals_in_deck
+            checked += 1
+        vm.choose(item.correct_option)
+        vm.continue_()
+    assert checked > 0
 
 
 def test_choose_mode_grades_and_advances(
