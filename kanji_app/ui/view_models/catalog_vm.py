@@ -12,7 +12,7 @@ from dataclasses import replace
 from PySide6.QtCore import QObject, Signal
 
 from kanji_app.core.kanjivg import StrokeDrawing
-from kanji_app.core.models import Kanji, Vocab
+from kanji_app.core.models import Kanji, SubjectType, Vocab
 from kanji_app.services.catalog import FilterOptions, KanjiCatalog, KanjiFilter
 from kanji_app.services.study import StudyService
 
@@ -60,6 +60,20 @@ class CatalogViewModel(QObject):
         if self._selected is None:
             return []
         return self._catalog.vocab_for_kanji(self._selected.id)
+
+    def selected_parts(self) -> str:
+        if self._selected is None:
+            return ""
+        return self._catalog.components_text(self._selected)
+
+    def selected_mnemonic(self) -> str:
+        if self._study is None or self._selected is None:
+            return ""
+        return self._study.mnemonic(SubjectType.KANJI, self._selected.id)
+
+    def save_mnemonic(self, text: str) -> None:
+        if self._study is not None and self._selected is not None:
+            self._study.set_mnemonic(SubjectType.KANJI, self._selected.id, text)
 
     @property
     def can_add_to_deck(self) -> bool:

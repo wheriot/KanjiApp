@@ -37,11 +37,20 @@ from kanji_app.core.review_session import DeckCounts
 from kanji_app.core.romaji import to_romaji
 from kanji_app.core.srs import FsrsScheduler, Scheduler
 from kanji_app.data import db
-from kanji_app.data.repositories import CardRepo, DeckRepo, KanjiRepo, ReviewLogRepo, VocabRepo
+from kanji_app.data.repositories import (
+    CardRepo,
+    DeckRepo,
+    KanjiRepo,
+    MnemonicRepo,
+    ReviewLogRepo,
+    VocabRepo,
+)
+from kanji_app.services.components import format_components, resolve_components
 from kanji_app.services.settings import AppSettings, SettingsStore
 from kanji_app.services.stats import StatsService
 
 _STUDY_MODES = (CardMode.RECOGNITION, CardMode.RECALL)
+CHOICE_COUNT = 12  # multiple-choice options: three rows of four
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,6 +73,9 @@ class ReviewItem:
     correct_option: int = -1
     # "type" mode: readings that count as correct when typed
     accepted: tuple[str, ...] = ()
+    # memory aids shown on reveal: the kanji's parts, and the learner's own note
+    components: str = ""
+    mnemonic: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,6 +89,7 @@ class TodaySummary:
     capped_new: int = 0  # further new cards the daily limit is holding back
     capped_due: int = 0  # further due reviews the daily limit is holding back
     next_due: datetime | None = None  # when the next scheduled card comes due
+    resets_at: datetime | None = None  # when today's new/review allowances reset
 
     @property
     def waiting(self) -> int:
@@ -85,6 +98,15 @@ class TodaySummary:
     @property
     def limit_reached(self) -> bool:
         return self.waiting == 0 and (self.capped_new > 0 or self.capped_due > 0)
+
+
+@dataclass(frozen=True, slots=True)
+class CardPoolRow:
+    """One card in a deck's pool, with its subject text pre-rendered."""
+
+    card: Card
+    headword: str
+    gloss: str
 
 
 class StudyService:
@@ -99,6 +121,7 @@ class StudyService:
         self._decks = DeckRepo(study_conn)
         self._cards = CardRepo(study_conn)
         self._log = ReviewLogRepo(study_conn)
+        self._mnemonics = MnemonicRepo(study_conn)
         self._kanji = KanjiRepo(reference_conn)
         self._vocab = VocabRepo(reference_conn)
         self._settings_store = SettingsStore(study_conn)
@@ -215,6 +238,18 @@ class StudyService:
                 added += 1
         return added
 
+    # -- mnemonics --------------------------------------------------
+
+    def mnemonic(self, subject_type: SubjectType, subject_id: int) -> str:
+        return self._mnemonics.get(subject_type, subject_id)
+
+    def set_mnemonic(self, subject_type: SubjectType, subject_id: int, text: str) -> None:
+        self._mnemonics.set(subject_type, subject_id, text)
+
+    def kanji_components(self, kanji: Kanji) -> str:
+        svg = self._kanji.stroke_svg(kanji.id)
+        return format_components(resolve_components(self._kanji, svg, kanji.literal))
+
     # -- reviewing -------------------------------------------------
 
     def deck_counts(self, deck_id: int, now: datetime | None = None) -> DeckCounts:
@@ -226,8 +261,11 @@ class StudyService:
         deck = self._decks.get(deck_id)
         cards = self._cards.for_deck(deck_id)
         raw = review_session.counts(cards, moment)
+        resets_at = review_session.next_reset(moment)
         if deck is None:
-            return TodaySummary(due=raw.due, new_available=raw.new, reviewed_today=0)
+            return TodaySummary(
+                due=raw.due, new_available=raw.new, reviewed_today=0, resets_at=resets_at
+            )
 
         since = review_session.day_start(moment)
         new_today = self._log.count_new_since(deck_id, since)
@@ -247,7 +285,19 @@ class StudyService:
             capped_new=raw.new - new_now,
             capped_due=raw.due - due_now,
             next_due=min(upcoming, default=None),
+            resets_at=resets_at,
         )
+
+    def deck_cards(self, deck_id: int) -> list[CardPoolRow]:
+        """Every card currently in a deck, with its headword/gloss pre-rendered."""
+        return [
+            CardPoolRow(
+                card=card,
+                headword=self._choice_text(card.subject_type, card.subject_id, recall=True),
+                gloss=self._choice_text(card.subject_type, card.subject_id, recall=False),
+            )
+            for card in self._cards.for_deck(deck_id)
+        ]
 
     def start_session(self, deck_id: int, now: datetime | None = None) -> list[ReviewItem]:
         moment = now or datetime.now(UTC)
@@ -283,14 +333,20 @@ class StudyService:
             kanji = self._kanji.get(card.subject_id)
             if kanji is None:
                 return None
-            base = _kanji_item(card, kanji, self._stroke_drawing(kanji))
+            svg = self._kanji.stroke_svg(kanji.id)
+            base = _kanji_item(card, kanji, parse_kanjivg(svg) if svg else None)
+            base = replace(
+                base,
+                components=format_components(resolve_components(self._kanji, svg, kanji.literal)),
+            )
         else:
             vocab = self._vocab.get(card.subject_id)
             if vocab is None:
                 return None
             sentences = self._vocab.sentences_for(card.subject_id, limit=1)
             base = _vocab_item(card, vocab, sentences[0] if sentences else None)
-        return self._for_input_mode(base)
+        note = self._mnemonics.get(card.subject_type, card.subject_id)
+        return self._for_input_mode(replace(base, mnemonic=note))
 
     def _for_input_mode(self, item: ReviewItem) -> ReviewItem:
         mode = self._settings.review_input
@@ -312,16 +368,16 @@ class StudyService:
         candidates = self._cards.subjects_in_deck(item.card.deck_id, subject_type, subject_id)
         random.shuffle(candidates)
         if subject_type == SubjectType.KANJI:
-            candidates += [k.id for k in self._kanji.sample(subject_id, 6)]
+            candidates += [k.id for k in self._kanji.sample(subject_id, CHOICE_COUNT)]
         else:
-            candidates += [v.id for v in self._vocab.sample(subject_id, 6)]
+            candidates += [v.id for v in self._vocab.sample(subject_id, CHOICE_COUNT)]
 
         pool = [item.answer]
         for candidate_id in candidates:
             text = self._choice_text(subject_type, candidate_id, recall=recall)
             if text and text not in pool:
                 pool.append(text)
-            if len(pool) == 4:
+            if len(pool) == CHOICE_COUNT:
                 break
         random.shuffle(pool)
         return tuple(pool), pool.index(item.answer)
@@ -347,10 +403,6 @@ class StudyService:
             vocab = self._vocab.get(item.card.subject_id)
             values = [vocab.kana] if vocab else []
         return tuple(_strip_reading(v) for v in values if v)
-
-    def _stroke_drawing(self, kanji: Kanji) -> StrokeDrawing | None:
-        svg = self._kanji.stroke_svg(kanji.id)
-        return parse_kanjivg(svg) if svg else None
 
     def stats_service(self) -> StatsService:
         """A :class:`StatsService` sharing this service's two connections."""

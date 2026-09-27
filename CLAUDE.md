@@ -149,8 +149,32 @@ catalog `browse` default `limit` is 5000 to cover the full set.
   doesn't leak; VM `submit_reading(text)` normalises via `romaji.to_kana` + kana fold.
 - `ReviewView` footer is a 6-page `QStackedWidget` selected by `_page_for()`.
 
+## Card pool + daily-reset countdown
+
+- `StudyService.deck_cards(deck_id) -> list[CardPoolRow]` renders every card's
+  headword/gloss via the existing `_choice_text` helper. `CardPoolDialog`
+  (`ui/views/card_pool_view.py`), opened from the Decks screen's "View cards…"
+  button, lists them in a sortable table filterable by SRS state.
+- `core/review_session.next_reset(now)` is the next daily-limit reset (the
+  following 04:00 boundary). Surfaced as `TodaySummary.resets_at` and rendered
+  as a countdown on the Dashboard and the Review idle screen via
+  `ui/format.py`'s `countdown()` / `relative_time()` (shared text helpers, no Qt).
+
+## Mnemonics (own notes + kanji parts)
+
+- `mnemonic` table (`subject_type, subject_id, text`) in `study.db`, via `MnemonicRepo`;
+  one note per kanji/word, independent of decks. `StudyService.mnemonic` / `set_mnemonic`.
+- `core/kanjivg.components(svg)` reads KanjiVG's top-level `kvg:element` groups (variants keep
+  `original`; `kvg:phon` marks the sound part). `services/components.py` names each part from
+  the kanji dictionary and formats it (`日 sun + 月 moon`). No new data to build or ship.
+- `ReviewItem.components` / `.mnemonic` are shown on reveal by `CardFace`; `ReviewView`'s
+  "Edit mnemonic" button → `ReviewViewModel.set_mnemonic`. Browse detail panels (kanji + vocab)
+  use the shared `ui/widgets/mnemonic_editor.MnemonicEditor`.
+- Opening `kanji.db` runs `migrate`, so a new schema table dirties the tracked binary; restore
+  it (`git checkout -- kanji_app/resources/kanji.db`) rather than committing that.
+
 ## Roadmap status
 
 Phases 0–7 are done, plus follow-ups (full Jōyō, bulk add, sentences, romaji,
-smart deck, review modes). Remaining items are under PLAN.md "Later / optional"
-(audio, PyInstaller, handwriting).
+smart deck, review modes, card pool + reset timer, mnemonics). Remaining items are under
+PLAN.md "Later / optional" (audio, PyInstaller, handwriting).

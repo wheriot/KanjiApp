@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from kanji_app.ui.view_models.decks_vm import DecksViewModel
+from kanji_app.ui.views.card_pool_view import CardPoolDialog
 
 _ID_ROLE = Qt.ItemDataRole.UserRole
 
@@ -47,12 +48,15 @@ class DecksView(QWidget):
         self._save.clicked.connect(self._save_editor)
         self._make_current = QPushButton("Make current")
         self._make_current.clicked.connect(self._make_current_deck)
+        self._view_cards = QPushButton("View cards…")
+        self._view_cards.clicked.connect(self._show_pool)
         self._delete = QPushButton("Delete")
         self._delete.clicked.connect(self._delete_deck)
 
         editor_buttons = QHBoxLayout()
         editor_buttons.addWidget(self._save)
         editor_buttons.addWidget(self._make_current)
+        editor_buttons.addWidget(self._view_cards)
         editor_buttons.addStretch(1)
         editor_buttons.addWidget(self._delete)
 
@@ -143,6 +147,12 @@ class DecksView(QWidget):
         deck_id = self._current_deck_id()
         if deck_id is not None:
             self._vm.delete(deck_id)
+
+    def _show_pool(self) -> None:
+        deck_id = self._current_deck_id()
+        if deck_id is None:
+            return
+        CardPoolDialog(self._vm.pool(deck_id), self._name.text()).exec()
 
     def _current_deck_id(self) -> int | None:
         item = self._list.currentItem()

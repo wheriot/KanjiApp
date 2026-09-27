@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from PySide6.QtCore import QObject, Signal
 
 from kanji_app.services.stats import StatsService
@@ -48,6 +50,10 @@ class DashboardViewModel(QObject):
     @property
     def limit_reached(self) -> bool:
         return self._summary.limit_reached
+
+    @property
+    def resets_at(self) -> datetime | None:
+        return self._summary.resets_at
 
     def set_deck(self, deck_id: int) -> None:
         self._deck_id = deck_id

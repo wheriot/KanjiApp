@@ -139,6 +139,14 @@ CREATE TABLE IF NOT EXISTS review_log (
 CREATE INDEX IF NOT EXISTS idx_review_log_card ON review_log(card_id);
 CREATE INDEX IF NOT EXISTS idx_review_log_time ON review_log(reviewed_at);
 
+-- The learner's own memory aids, one per kanji/word (independent of any deck).
+CREATE TABLE IF NOT EXISTS mnemonic (
+    subject_type TEXT    NOT NULL CHECK (subject_type IN ('kanji', 'vocab')),
+    subject_id   INTEGER NOT NULL,
+    text         TEXT    NOT NULL,
+    PRIMARY KEY (subject_type, subject_id)
+);
+
 CREATE TABLE IF NOT EXISTS setting (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL

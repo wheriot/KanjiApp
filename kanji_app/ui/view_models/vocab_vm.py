@@ -7,7 +7,7 @@ from dataclasses import replace
 
 from PySide6.QtCore import QObject, Signal
 
-from kanji_app.core.models import Sentence, Vocab
+from kanji_app.core.models import Sentence, SubjectType, Vocab
 from kanji_app.services.catalog import FilterOptions, KanjiCatalog, VocabFilter
 from kanji_app.services.study import StudyService
 
@@ -56,6 +56,15 @@ class VocabViewModel(QObject):
     def kanji_literal(self, kanji_id: int) -> str | None:
         kanji = self._catalog.get(kanji_id)
         return kanji.literal if kanji is not None else None
+
+    def selected_mnemonic(self) -> str:
+        if self._study is None or self._selected is None:
+            return ""
+        return self._study.mnemonic(SubjectType.VOCAB, self._selected.id)
+
+    def save_mnemonic(self, text: str) -> None:
+        if self._study is not None and self._selected is not None:
+            self._study.set_mnemonic(SubjectType.VOCAB, self._selected.id, text)
 
     def selected_sentences(self) -> list[Sentence]:
         if self._selected is None:

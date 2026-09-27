@@ -7,12 +7,12 @@ switched by ``(input_mode, phase)``.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
+    QGridLayout,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QPushButton,
@@ -22,10 +22,13 @@ from PySide6.QtWidgets import (
 )
 
 from kanji_app.core.models import Rating
+from kanji_app.services.study import CHOICE_COUNT
+from kanji_app.ui.format import countdown, relative_time
 from kanji_app.ui.view_models.review_vm import ReviewViewModel
 from kanji_app.ui.widgets.card_widget import CardFace
 
 _RATING_KEYS = {Rating.AGAIN: "1", Rating.HARD: "2", Rating.GOOD: "3", Rating.EASY: "4"}
+_CHOICE_COLUMNS = 4
 _IDLE, _REVEAL_Q, _REVEAL_A, _CHOOSE_Q, _TYPE_Q, _CONTINUE = range(6)
 
 
@@ -38,6 +41,10 @@ class ReviewView(QWidget):
         self._status.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._card = CardFace()
 
+        self._note_button = QPushButton("Edit mnemonic")
+        self._note_button.setFlat(True)
+        self._note_button.clicked.connect(self._edit_mnemonic)
+
         self._footer = QStackedWidget()
         self._footer.addWidget(self._build_idle_page())
         self._footer.addWidget(self._build_reveal_page())
@@ -49,6 +56,7 @@ class ReviewView(QWidget):
         layout = QVBoxLayout(self)
         layout.addWidget(self._status)
         layout.addWidget(self._card, stretch=1)
+        layout.addWidget(self._note_button, alignment=Qt.AlignmentFlag.AlignRight)
         layout.addWidget(self._footer)
 
         self._install_shortcuts()
@@ -62,9 +70,13 @@ class ReviewView(QWidget):
         box = QVBoxLayout(page)
         self._idle_label = QLabel()
         self._idle_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._reset_label = QLabel()
+        self._reset_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._reset_label.setEnabled(False)
         self._start_button = QPushButton("Start studying")
         self._start_button.clicked.connect(self._vm.start)
         box.addWidget(self._idle_label)
+        box.addWidget(self._reset_label)
         box.addWidget(self._start_button)
         return page
 
@@ -87,13 +99,13 @@ class ReviewView(QWidget):
 
     def _build_choose_page(self) -> QWidget:
         page = QWidget()
-        box = QHBoxLayout(page)
+        grid = QGridLayout(page)
         self._choice_buttons: list[QPushButton] = []
-        for index in range(4):
+        for index in range(CHOICE_COUNT):
             button = QPushButton()
             button.clicked.connect(lambda _=False, i=index: self._vm.choose(i))
             self._choice_buttons.append(button)
-            box.addWidget(button)
+            grid.addWidget(button, index // _CHOICE_COLUMNS, index % _CHOICE_COLUMNS)
         return page
 
     def _build_type_page(self) -> QWidget:
@@ -123,6 +135,8 @@ class ReviewView(QWidget):
         QShortcut(QKeySequence(Qt.Key.Key_Return), self, self._on_space)
         for rating, key in _RATING_KEYS.items():
             QShortcut(QKeySequence(key), self, lambda r=rating: self._on_number(int(r.value)))
+        for digit in range(5, 10):  # extra keys for the 5th-9th multiple-choice options
+            QShortcut(QKeySequence(str(digit)), self, lambda n=digit: self._on_number(n))
 
     def _on_space(self) -> None:
         page = self._footer.currentIndex()
@@ -143,6 +157,16 @@ class ReviewView(QWidget):
     def _submit_reading(self) -> None:
         self._vm.submit_reading(self._reading_input.text())
 
+    def _edit_mnemonic(self) -> None:
+        item = self._vm.current
+        if item is None:
+            return
+        text, ok = QInputDialog.getMultiLineText(
+            self, "Mnemonic", "Your memory aid for this card:", item.mnemonic
+        )
+        if ok:
+            self._vm.set_mnemonic(text)
+
     # -- rendering -----------------------------------------------
 
     def start_session(self) -> None:
@@ -155,6 +179,7 @@ class ReviewView(QWidget):
     def _render(self) -> None:
         item = self._vm.current
         self._card.show_item(item, self._vm.revealed)
+        self._note_button.setVisible(item is not None and self._vm.revealed)
 
         if item is None:
             self._footer.setCurrentIndex(_IDLE)
@@ -188,6 +213,7 @@ class ReviewView(QWidget):
     def _render_idle(self) -> None:
         summary = self._vm.today_summary()
         self._status.setText("Review")
+        self._reset_label.setText("")
 
         if summary.waiting > 0:
             self._start_button.setVisible(True)
@@ -198,6 +224,8 @@ class ReviewView(QWidget):
             return
 
         self._start_button.setVisible(False)
+        if summary.resets_at is not None:
+            self._reset_label.setText(f"Daily limits reset in {countdown(summary.resets_at)}.")
 
         if summary.limit_reached:
             held = []
@@ -215,25 +243,15 @@ class ReviewView(QWidget):
             self._status.setText("Session complete")
             self._idle_label.setText(f"All done — {self._vm.answered} cards reviewed. 🎉")
         elif summary.next_due is not None:
-            self._idle_label.setText(f"All caught up. Next review {_relative(summary.next_due)}.")
+            self._idle_label.setText(
+                f"All caught up. Next review {relative_time(summary.next_due)}."
+            )
         else:
             self._idle_label.setText(
                 "Nothing due yet.\nAdd kanji or vocab from the Browse tab to build your deck."
             )
+            self._reset_label.setText("")
 
 
 def _s(n: int) -> str:
     return "" if n == 1 else "s"
-
-
-def _relative(when: datetime) -> str:
-    seconds = (when - datetime.now(UTC)).total_seconds()
-    if seconds <= 90:
-        return "in a moment"
-    minutes = seconds / 60
-    if minutes < 90:
-        return f"in about {round(minutes)} minutes"
-    hours = minutes / 60
-    if hours < 36:
-        return f"in about {round(hours)} hours"
-    return f"in about {round(hours / 24)} days"

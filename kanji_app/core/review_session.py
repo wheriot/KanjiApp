@@ -23,6 +23,11 @@ def day_start(now: datetime, *, hour: int = DAY_START_HOUR) -> datetime:
     return anchor
 
 
+def next_reset(now: datetime, *, hour: int = DAY_START_HOUR) -> datetime:
+    """When the current study day's new/review allowances reset."""
+    return day_start(now, hour=hour) + timedelta(days=1)
+
+
 def is_due(card: Card, now: datetime) -> bool:
     """A non-new card whose scheduled time has arrived."""
     return card.scheduling.state != CardState.NEW and card.scheduling.due <= now

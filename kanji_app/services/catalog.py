@@ -15,6 +15,7 @@ from kanji_app.core.kanjivg import parse as parse_kanjivg
 from kanji_app.core.models import Kanji, Sentence, Vocab
 from kanji_app.data import db
 from kanji_app.data.repositories import KanjiRepo, VocabRepo
+from kanji_app.services.components import format_components, resolve_components
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,6 +69,11 @@ class KanjiCatalog:
     def stroke_drawing(self, kanji_id: int) -> StrokeDrawing | None:
         svg = self._repo.stroke_svg(kanji_id)
         return parse_kanjivg(svg) if svg else None
+
+    def components_text(self, kanji: Kanji) -> str:
+        """The kanji's parts as text, e.g. ``日 sun + 月 moon``."""
+        svg = self._repo.stroke_svg(kanji.id)
+        return format_components(resolve_components(self._repo, svg, kanji.literal))
 
     def filter_options(self) -> FilterOptions:
         return FilterOptions(

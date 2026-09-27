@@ -66,3 +66,13 @@ def test_build_queue_orders_due_first_then_new_and_applies_allowances() -> None:
 def test_build_queue_clamps_negative_allowance() -> None:
     cards = [_card(3, CardState.REVIEW, NOON - timedelta(hours=1))]
     assert review_session.build_queue(cards, now=NOON, new_allowance=-5, review_allowance=-1) == []
+
+
+def test_next_reset_is_the_following_day_boundary() -> None:
+    before = datetime(2026, 1, 15, 2, 0, tzinfo=UTC).astimezone()
+    after = datetime(2026, 1, 15, 9, 0, tzinfo=UTC).astimezone()
+    for moment in (before, after):
+        reset = review_session.next_reset(moment, hour=4)
+        assert reset == review_session.day_start(moment, hour=4) + timedelta(days=1)
+        assert reset > moment
+        assert reset.hour == 4
