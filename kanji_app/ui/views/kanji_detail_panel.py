@@ -8,6 +8,7 @@ from PySide6.QtWidgets import QFormLayout, QLabel, QPushButton, QVBoxLayout, QWi
 from kanji_app.core.kanjivg import StrokeDrawing
 from kanji_app.core.models import Kanji, ReadingType, Vocab
 from kanji_app.core.romaji import to_romaji
+from kanji_app.ui.widgets.mnemonic_editor import MnemonicEditor
 from kanji_app.ui.widgets.stroke_order_widget import StrokeOrderWidget
 
 _PLACEHOLDER = "Select a kanji to see its details."
@@ -21,6 +22,7 @@ def _readings_line(values: tuple[str, ...]) -> str:
 
 class KanjiDetailPanel(QWidget):
     add_requested = Signal()
+    mnemonic_saved = Signal(str)
 
     def __init__(self) -> None:
         super().__init__()
@@ -45,15 +47,21 @@ class KanjiDetailPanel(QWidget):
         self._kun = QLabel()
         self._meta = QLabel()
         self._words = QLabel()
-        for label in (self._on, self._kun, self._meta, self._words):
+        self._parts = QLabel()
+        for label in (self._on, self._kun, self._meta, self._words, self._parts):
             label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
             label.setWordWrap(True)
+
+        self._mnemonic = MnemonicEditor()
+        self._mnemonic.saved.connect(self.mnemonic_saved)
 
         form = QFormLayout()
         form.addRow("On", self._on)
         form.addRow("Kun", self._kun)
         form.addRow("Info", self._meta)
         form.addRow("Words", self._words)
+        form.addRow("Parts", self._parts)
+        form.addRow("Mnemonic", self._mnemonic)
 
         self._strokes = StrokeOrderWidget()
 
@@ -81,6 +89,8 @@ class KanjiDetailPanel(QWidget):
         kanji: Kanji | None,
         drawing: StrokeDrawing | None,
         words: list[Vocab] | None = None,
+        parts: str = "",
+        mnemonic: str = "",
     ) -> None:
         self._placeholder.setVisible(kanji is None)
         self._content.setVisible(kanji is not None)
@@ -96,11 +106,14 @@ class KanjiDetailPanel(QWidget):
         self._words.setText(
             "  ".join(f"{v.expression} [{v.kana}]" for v in (words or [])[:8]) or "—"
         )
+        self._parts.setText(parts or "—")
+        self._mnemonic.set_text(mnemonic)
 
     def set_deck_state(self, *, can_add: bool, in_deck: bool) -> None:
         self._add_button.setVisible(can_add)
         self._add_button.setEnabled(can_add and not in_deck)
         self._add_button.setText("In study deck ✓" if in_deck else "Add to study deck")
+        self._mnemonic.set_editable(can_add)
 
 
 def _format_meta(kanji: Kanji) -> str:

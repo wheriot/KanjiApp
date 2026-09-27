@@ -56,6 +56,25 @@ def test_answer_persists_and_reschedules(study_service: StudyService) -> None:
     assert same.card.scheduling.due > NOON
 
 
+def test_today_summary_reports_the_next_reset_time(study_service: StudyService) -> None:
+    deck = study_service.default_deck()
+    summary = study_service.today_summary(deck.id, NOON)
+    assert summary.resets_at is not None
+    assert summary.resets_at > NOON
+
+
+def test_deck_cards_lists_every_card_with_headword_and_gloss(study_service: StudyService) -> None:
+    deck = study_service.default_deck()
+    study_service.add_kanji(deck.id, 1, NOON)
+
+    rows = study_service.deck_cards(deck.id)
+    assert len(rows) == 2
+    modes = {row.card.mode for row in rows}
+    assert modes == {CardMode.RECOGNITION, CardMode.RECALL}
+    assert all(row.headword for row in rows)
+    assert all(row.gloss for row in rows)
+
+
 def test_progress_survives_reopen(tmp_path: Path) -> None:
     service = open_study_service(tmp_path)
     deck = service.default_deck()

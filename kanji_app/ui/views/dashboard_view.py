@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from kanji_app.ui.format import countdown
 from kanji_app.ui.view_models.dashboard_vm import DashboardViewModel
 
 
@@ -40,12 +41,16 @@ class DashboardView(QWidget):
         self._start.clicked.connect(self.study_requested)
         self._start.setMinimumHeight(40)
 
+        self._reset = QLabel()
+        self._reset.setEnabled(False)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(20)
         layout.addWidget(self._title)
         layout.addLayout(tiles)
         layout.addWidget(self._start)
+        layout.addWidget(self._reset)
         layout.addStretch(1)
 
         self._vm.changed.connect(self._render)
@@ -68,6 +73,9 @@ class DashboardView(QWidget):
             self._start.setText("Daily limit reached — raise it on the Decks screen")
         else:
             self._start.setText("Nothing due — add kanji from Browse")
+
+        resets_at = self._vm.resets_at
+        self._reset.setText(f"Daily limits reset in {countdown(resets_at)}." if resets_at else "")
 
 
 class _StatTile(QFrame):

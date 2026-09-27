@@ -428,6 +428,15 @@ class CardRepo:
         ).fetchall()
         return {CardMode(r["mode"]) for r in rows}
 
+    def subjects_in_deck(self, deck_id: int, subject_type: SubjectType, exclude: int) -> list[int]:
+        """Distinct subject ids of one type in a deck, minus ``exclude``."""
+        rows = self._conn.execute(
+            "SELECT DISTINCT subject_id FROM card "
+            "WHERE deck_id = ? AND subject_type = ? AND subject_id != ?",
+            (deck_id, subject_type.value, exclude),
+        ).fetchall()
+        return [int(r["subject_id"]) for r in rows]
+
     def create(
         self,
         deck_id: int,
@@ -624,6 +633,34 @@ class SettingsRepo:
 
     def all(self) -> dict[str, str]:
         return {r["key"]: r["value"] for r in self._conn.execute("SELECT key, value FROM setting")}
+
+
+class MnemonicRepo:
+    """The learner's own mnemonic notes, keyed by ``(subject_type, subject_id)``."""
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self._conn = conn
+
+    def get(self, subject_type: SubjectType, subject_id: int) -> str:
+        row = self._conn.execute(
+            "SELECT text FROM mnemonic WHERE subject_type = ? AND subject_id = ?",
+            (subject_type.value, subject_id),
+        ).fetchone()
+        return str(row["text"]) if row else ""
+
+    def set(self, subject_type: SubjectType, subject_id: int, text: str) -> None:
+        """Save a note; a blank note removes it."""
+        if not text.strip():
+            self._conn.execute(
+                "DELETE FROM mnemonic WHERE subject_type = ? AND subject_id = ?",
+                (subject_type.value, subject_id),
+            )
+            return
+        self._conn.execute(
+            "INSERT INTO mnemonic (subject_type, subject_id, text) VALUES (?, ?, ?) "
+            "ON CONFLICT(subject_type, subject_id) DO UPDATE SET text = excluded.text",
+            (subject_type.value, subject_id, text.strip()),
+        )
 
 
 def _scheduling_params(s: SchedulingState) -> dict[str, object]:

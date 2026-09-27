@@ -9,7 +9,7 @@ from __future__ import annotations
 from PySide6.QtCore import QObject, Signal
 
 from kanji_app.core.models import Deck
-from kanji_app.services.study import StudyService
+from kanji_app.services.study import CardPoolRow, StudyService
 
 
 class DeckController(QObject):
@@ -36,6 +36,9 @@ class DeckController(QObject):
 
     def card_count(self, deck_id: int) -> int:
         return self._study.deck_card_count(deck_id)
+
+    def pool(self, deck_id: int) -> list[CardPoolRow]:
+        return self._study.deck_cards(deck_id)
 
     # -- commands -------------------------------------------------
 

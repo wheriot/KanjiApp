@@ -19,6 +19,9 @@ _STROKE_PATHS_RE = re.compile(
     re.DOTALL,
 )
 _PATH_D_RE = re.compile(r"<path[^>]*\sd=\"([^\"]+)\"")
+_GROUP_TAG_RE = re.compile(r"<g\b([^>]*)>|</g>")
+_KVG_ATTR_RE = re.compile(r'kvg:(\w+)="([^"]*)"')
+_COMPONENT_DEPTH = 3  # <StrokePaths> > <kanji> > <component>
 
 DEFAULT_VIEW_BOX = "0 0 109 109"
 
@@ -31,6 +34,34 @@ class StrokeDrawing:
     @property
     def stroke_count(self) -> int:
         return len(self.strokes)
+
+
+@dataclass(frozen=True, slots=True)
+class Component:
+    """A top-level part of a kanji, e.g. 日 and 月 inside 明."""
+
+    element: str
+    original: str | None = None  # base form when ``element`` is a variant (亻 -> 人)
+    phonetic: bool = False  # the part that hints at the kanji's on-reading
+
+
+def components(svg: str) -> tuple[Component, ...]:
+    """The kanji's top-level parts, read from KanjiVG's ``kvg:element`` groups."""
+    depth = 0
+    parts: list[Component] = []
+    for match in _GROUP_TAG_RE.finditer(svg):
+        if match.group(0) == "</g>":
+            depth -= 1
+            continue
+        if match.group(1).rstrip().endswith("/"):
+            continue
+        depth += 1
+        if depth != _COMPONENT_DEPTH:
+            continue
+        attrs = dict(_KVG_ATTR_RE.findall(match.group(1)))
+        if element := attrs.get("element"):
+            parts.append(Component(element, attrs.get("original"), "phon" in attrs))
+    return tuple(parts)
 
 
 def parse(svg: str) -> StrokeDrawing:

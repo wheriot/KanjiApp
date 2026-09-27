@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from kanji_app.core.models import CardMode
 from kanji_app.core.romaji import to_romaji
 from kanji_app.data.repositories import KanjiRepo
 from kanji_app.services.settings import AppSettings
-from kanji_app.services.study import StudyService
+from kanji_app.services.study import CHOICE_COUNT, StudyService
 from kanji_app.ui.view_models.review_vm import ReviewViewModel
 
 NOON = datetime(2026, 10, 1, 12, 0, tzinfo=UTC)
@@ -18,7 +19,7 @@ def _deck_with_kanji(study: StudyService, repo: KanjiRepo, n: int) -> int:
     return deck_id
 
 
-def test_choose_mode_builds_four_options_including_the_answer(
+def test_choose_mode_builds_twelve_options_including_the_answer(
     study_service: StudyService, reference_repo: KanjiRepo
 ) -> None:
     study_service.update_settings(AppSettings(review_input="choose"))
@@ -28,8 +29,28 @@ def test_choose_mode_builds_four_options_including_the_answer(
     vm.start(NOON)
     item = vm.current
     assert item is not None
-    assert len(item.options) == 4
+    assert len(item.options) == CHOICE_COUNT == 12
+    assert len(set(item.options)) == 12
     assert item.options[item.correct_option] == item.answer
+
+
+def test_choose_distractors_come_from_the_deck_once_it_is_big_enough(
+    study_service: StudyService, reference_repo: KanjiRepo
+) -> None:
+    study_service.update_settings(AppSettings(review_input="choose"))
+    deck_id = _deck_with_kanji(study_service, reference_repo, CHOICE_COUNT + 1)
+    literals_in_deck = {k.literal for k in reference_repo.find(jlpt=5)[: CHOICE_COUNT + 1]}
+
+    vm = ReviewViewModel(study_service, deck_id)
+    vm.start(NOON)
+    checked = 0
+    while (item := vm.current) is not None:
+        if item.card.mode == CardMode.RECALL:  # options are kanji literals
+            assert set(item.options) <= literals_in_deck
+            checked += 1
+        vm.choose(item.correct_option)
+        vm.continue_()
+    assert checked > 0
 
 
 def test_choose_mode_grades_and_advances(
@@ -52,7 +73,7 @@ def test_choose_mode_grades_and_advances(
 
     nxt = vm.current
     assert nxt is not None
-    vm.choose((nxt.correct_option + 1) % 4)
+    vm.choose((nxt.correct_option + 1) % len(nxt.options))
     assert vm.graded_correct is False
 
 

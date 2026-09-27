@@ -29,6 +29,8 @@ class CardFace(QWidget):
         self._answer_note = _text(15, faint=True)
         self._sentence = _text(14)
         self._sentence.setContentsMargins(24, 8, 24, 0)
+        self._memory = _text(13)
+        self._memory.setContentsMargins(24, 4, 24, 0)
         self._stroke = StrokeOrderWidget()
 
         layout = QVBoxLayout(self)
@@ -39,6 +41,7 @@ class CardFace(QWidget):
         layout.addWidget(self._answer)
         layout.addWidget(self._answer_note)
         layout.addWidget(self._sentence)
+        layout.addWidget(self._memory)
         layout.addWidget(self._stroke, stretch=1)
         layout.addStretch(1)
 
@@ -50,6 +53,7 @@ class CardFace(QWidget):
                 self._answer,
                 self._answer_note,
                 self._sentence,
+                self._memory,
             ):
                 label.clear()
             self._stroke.set_drawing(None)
@@ -63,12 +67,15 @@ class CardFace(QWidget):
         self._answer.setText(item.answer)
         self._answer_note.setText(item.answer_note)
         self._sentence.setText(_sentence_text(item))
+        memory = _memory_text(item)
+        self._memory.setText(memory)
         self._stroke.set_drawing(item.stroke if revealed else None)
         self._set_answer_visible(
             revealed,
             has_note=bool(item.answer_note),
             has_stroke=item.stroke is not None,
             has_sentence=item.sentence is not None,
+            has_memory=bool(memory),
         )
 
     def _set_answer_visible(
@@ -78,11 +85,13 @@ class CardFace(QWidget):
         has_note: bool = False,
         has_stroke: bool = False,
         has_sentence: bool = False,
+        has_memory: bool = False,
     ) -> None:
         self._divider.setVisible(revealed)
         self._answer.setVisible(revealed)
         self._answer_note.setVisible(revealed and has_note)
         self._sentence.setVisible(revealed and has_sentence)
+        self._memory.setVisible(revealed and has_memory)
         self._stroke.setVisible(revealed and has_stroke)
 
 
@@ -90,6 +99,15 @@ def _sentence_text(item: ReviewItem) -> str:
     if item.sentence is None:
         return ""
     return f"{item.sentence.japanese}\n{item.sentence.english}"
+
+
+def _memory_text(item: ReviewItem) -> str:
+    lines = []
+    if item.components:
+        lines.append(f"Parts: {item.components}")
+    if item.mnemonic:
+        lines.append(item.mnemonic)
+    return "\n".join(lines)
 
 
 def _text(point_size: int, *, faint: bool = False) -> QLabel:

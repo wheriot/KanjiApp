@@ -186,6 +186,15 @@ README.md
 - `build_db.py` now defaults to `joyo.txt` and applies whichever `n{1..5}.txt` exist; vocab inherits its hardest kanji's level; `--jlpt` flag removed
 - Shipped `kanji.db` grew to ~13 MB: 2136 kanji + stroke SVGs + ~15k vocab. Browse filters by grade (1–6, 8) and JLPT (N1/N2/N4/N5); `find`/`browse` limit raised to 5000
 
+### Post-roadmap — card pool, reset timer ✅
+- `StudyService.deck_cards` / `CardPoolRow`: every card in a deck with its headword + gloss pre-rendered; `CardPoolDialog` (opened from the Decks screen's "View cards…" button) lists them in a sortable table, filterable by SRS state
+- `core/review_session.next_reset` + `TodaySummary.resets_at`: a "Daily limits reset in Xh Ym" countdown on the Dashboard and the Review idle screen (`kanji_app/ui/format.py` holds the shared `relative_time`/`countdown` text helpers)
+
+### Post-roadmap — mnemonics ✅
+- Your own note per kanji/word (`mnemonic` table in `study.db`), editable from the Browse detail panels and from the Review screen, shown on the answer side
+- Kanji "Parts" (e.g. 明 = 日 sun + 月 moon, with the phonetic part flagged) parsed from the KanjiVG groups already in `kanji.db`; shown on the kanji detail panel and the review answer
+- Not done: AI-generated starter mnemonics, related-kanji families (same component + on-reading)
+
 ### Post-roadmap — bulk add ✅
 - `StudyService.add_kanji_bulk` / `add_vocab_bulk` (one transaction; skip subjects already in the deck)
 - `AddAllButton` on both Browse tabs: adds every kanji/word matching the current filters + search to the current deck, with a confirmation dialog (e.g. filter to Grade 3 → "Add all 200")

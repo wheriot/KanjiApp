@@ -26,6 +26,7 @@ def test_idle_state_offers_start_when_cards_waiting(study_service: StudyService)
     view = _view(study_service, with_kanji=1)
     assert not view._start_button.isHidden()
     assert "new card" in view._idle_label.text()
+    assert view._reset_label.text() == ""
 
 
 def test_idle_state_explains_the_daily_limit(study_service: StudyService) -> None:
@@ -45,6 +46,7 @@ def test_idle_state_explains_the_daily_limit(study_service: StudyService) -> Non
     assert "Daily limit reached" in text
     assert "held back" in text
     assert view._start_button.isHidden()
+    assert "reset in" in view._reset_label.text().lower()
 
 
 def test_flow_reveal_and_rate(study_service: StudyService) -> None:

@@ -12,6 +12,7 @@ For ``choose`` / ``type`` the card is revealed with the result, then a single
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 
 from PySide6.QtCore import QObject, Signal
@@ -106,6 +107,22 @@ class ReviewViewModel(QObject):
         if item is None or self._revealed:
             return
         self._grade_and_reveal(_matches_reading(text, item.accepted))
+
+    def set_mnemonic(self, text: str) -> None:
+        """Save the learner's note for the current card's subject."""
+        item = self.current
+        if item is None:
+            return
+        subject = (item.card.subject_type, item.card.subject_id)
+        self._study.set_mnemonic(*subject, text)
+        note = text.strip()
+        self._queue = [
+            replace(queued, mnemonic=note)
+            if (queued.card.subject_type, queued.card.subject_id) == subject
+            else queued
+            for queued in self._queue
+        ]
+        self.state_changed.emit()
 
     def continue_(self, now: datetime | None = None) -> None:
         """``choose`` / ``type`` mode: apply the auto-grade and advance."""

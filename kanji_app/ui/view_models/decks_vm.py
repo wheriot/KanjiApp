@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from PySide6.QtCore import QObject, Signal
 
 from kanji_app.core.models import Deck
+from kanji_app.services.study import CardPoolRow
 from kanji_app.ui.deck_controller import DeckController
 
 
@@ -39,6 +40,9 @@ class DecksViewModel(QObject):
 
     def can_delete(self) -> bool:
         return len(self._controller.decks()) > 1
+
+    def pool(self, deck_id: int) -> list[CardPoolRow]:
+        return self._controller.pool(deck_id)
 
     def create(self, name: str) -> None:
         self._controller.create(name)

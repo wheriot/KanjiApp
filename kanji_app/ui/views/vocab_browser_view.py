@@ -21,6 +21,7 @@ from kanji_app.core.models import Vocab
 from kanji_app.core.romaji import to_romaji
 from kanji_app.ui.view_models.vocab_vm import VocabViewModel
 from kanji_app.ui.views.bulk_add import AddAllButton, SmartAddControl
+from kanji_app.ui.widgets.mnemonic_editor import MnemonicEditor
 
 _ID_ROLE = Qt.ItemDataRole.UserRole
 
@@ -117,6 +118,9 @@ class VocabBrowserView(QWidget):
         self._add.clicked.connect(self._vm.add_selected_to_deck)
         self._add.hide()
 
+        self._mnemonic = MnemonicEditor()
+        self._mnemonic.saved.connect(self._vm.save_mnemonic)
+
         self._detail = QWidget()
         form = QFormLayout(self._detail)
         form.addRow(self._expression)
@@ -125,6 +129,7 @@ class VocabBrowserView(QWidget):
         form.addRow("Info", self._info)
         form.addRow("Kanji", self._kanji)
         form.addRow("Examples", self._sentences)
+        form.addRow("Mnemonic", self._mnemonic)
         form.addRow(self._add)
 
         self._placeholder = QLabel("Select a word to see its details.")
@@ -178,6 +183,8 @@ class VocabBrowserView(QWidget):
         self._sentences.setText(
             "\n\n".join(f"{s.japanese}\n{s.english}" for s in self._vm.selected_sentences()) or "—"
         )
+        self._mnemonic.set_text(self._vm.selected_mnemonic())
+        self._mnemonic.set_editable(self._vm.can_add_to_deck)
         self._add.setVisible(self._vm.can_add_to_deck)
         self._add.setEnabled(self._vm.can_add_to_deck and not self._vm.selected_in_deck)
         self._add.setText("In study deck ✓" if self._vm.selected_in_deck else "Add to study deck")
