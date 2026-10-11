@@ -26,6 +26,14 @@ def test_create_and_select_emits(study_service: StudyService) -> None:
     assert selected == [deck.id]
 
 
+def test_selected_deck_is_remembered_for_the_next_launch(study_service: StudyService) -> None:
+    deck = DeckController(study_service).create("Vocab")
+    DeckController(study_service).select(deck.id)
+
+    assert DeckController(study_service).current_id == deck.id  # a fresh controller resumes it
+    assert study_service.current_deck().id == deck.id  # and the phone server sees it
+
+
 def test_rename_and_set_limits(study_service: StudyService) -> None:
     controller = DeckController(study_service)
     deck_id = controller.current_id

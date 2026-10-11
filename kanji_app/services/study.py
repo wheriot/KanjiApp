@@ -19,6 +19,7 @@ from pathlib import Path
 
 from kanji_app.config import BUNDLED_DB, Paths
 from kanji_app.core import review_session
+from kanji_app.core.grading import matches_reading, rating_for
 from kanji_app.core.kanjivg import StrokeDrawing
 from kanji_app.core.kanjivg import parse as parse_kanjivg
 from kanji_app.core.models import (
@@ -112,6 +113,14 @@ class CardPoolRow:
 
 
 @dataclass(frozen=True, slots=True)
+class GradeResult:
+    """An auto-graded ``choose`` / ``type`` answer, with the card to reveal."""
+
+    correct: bool
+    item: ReviewItem
+
+
+@dataclass(frozen=True, slots=True)
 class ReviewHistoryRow:
     """One past answer, newest first, with its subject text pre-rendered."""
 
@@ -154,7 +163,23 @@ class StudyService:
             self._scheduler = FsrsScheduler(self._settings.fsrs_retention)
         return self._settings
 
+    def reload_settings(self) -> AppSettings:
+        """Re-read settings another process (the desktop app) may have changed."""
+        self._settings = self._settings_store.load()
+        if isinstance(self._scheduler, FsrsScheduler):
+            self._scheduler = FsrsScheduler(self._settings.fsrs_retention)
+        return self._settings
+
     # -- decks --------------------------------------------------------
+
+    def current_deck(self) -> Deck:
+        """The deck last selected on the desktop, else the default deck."""
+        deck_id = self._settings_store.current_deck_id()
+        deck = self._decks.get(deck_id) if deck_id is not None else None
+        return deck or self._decks.ensure_default()
+
+    def set_current_deck(self, deck_id: int) -> None:
+        self._settings_store.set_current_deck_id(deck_id)
 
     def decks(self) -> list[Deck]:
         return self._decks.all()
@@ -331,18 +356,15 @@ class StudyService:
         return rows
 
     def start_session(self, deck_id: int, now: datetime | None = None) -> list[ReviewItem]:
-        moment = now or datetime.now(UTC)
-        deck = self._decks.get(deck_id)
-        if deck is None:
-            return []
-        since = review_session.day_start(moment)
-        queue = review_session.build_queue(
-            self._cards.for_deck(deck_id),
-            now=moment,
-            new_allowance=deck.new_per_day - self._log.count_new_since(deck_id, since),
-            review_allowance=deck.reviews_per_day - self._log.count_since(deck_id, since),
-        )
+        queue = self._queue_cards(deck_id, now or datetime.now(UTC))
         return [item for card in queue if (item := self._to_item(card)) is not None]
+
+    def next_item(self, deck_id: int, now: datetime | None = None) -> ReviewItem | None:
+        """The first card of today's queue, rendering only that one card."""
+        for card in self._queue_cards(deck_id, now or datetime.now(UTC)):
+            if (item := self._to_item(card)) is not None:
+                return item
+        return None
 
     def answer(
         self,
@@ -351,13 +373,60 @@ class StudyService:
         now: datetime | None = None,
         elapsed_ms: int = 0,
     ) -> None:
+        self.answer_card(card.id, rating, now, elapsed_ms)
+
+    def answer_card(
+        self,
+        card_id: int,
+        rating: Rating,
+        now: datetime | None = None,
+        elapsed_ms: int = 0,
+    ) -> bool:
+        """Grade a card from its *stored* state, never a possibly stale copy (it may
+        have been answered on another device). False if the card no longer exists."""
+        card = self._cards.get(card_id)
+        if card is None:
+            return False
         moment = now or datetime.now(UTC)
         result = self._scheduler.review(card.scheduling, rating, moment)
         with db.transaction(self._study):
             self._cards.update_scheduling(card.id, result.state)
             self._log.record(card.id, rating, result, moment, elapsed_ms)
+        return True
+
+    def submit_answer(
+        self,
+        card_id: int,
+        response: str,
+        now: datetime | None = None,
+        elapsed_ms: int = 0,
+    ) -> GradeResult | None:
+        """Auto-grade a ``choose`` (option text) or ``type`` (reading) response and
+        record it as Good / Again. None if the card no longer exists."""
+        card = self._cards.get(card_id)
+        item = self._to_item(card) if card is not None else None
+        if item is None:
+            return None
+        if self._settings.review_input == "type":
+            correct = matches_reading(response, item.accepted)
+        else:
+            correct = response == item.answer
+        self.answer_card(card_id, rating_for(correct), now, elapsed_ms)
+        return GradeResult(correct=correct, item=item)
 
     # -- internals ------------------------------------------------
+
+    def _queue_cards(self, deck_id: int, moment: datetime) -> list[Card]:
+        deck = self._decks.get(deck_id)
+        if deck is None:
+            return []
+        since = review_session.day_start(moment)
+        return review_session.build_queue(
+            self._cards.for_deck(deck_id),
+            now=moment,
+            new_allowance=deck.new_per_day - self._log.count_new_since(deck_id, since),
+            review_allowance=deck.reviews_per_day - self._log.count_since(deck_id, since),
+        )
 
     def _to_item(self, card: Card) -> ReviewItem | None:
         if card.subject_type == SubjectType.KANJI:
@@ -508,16 +577,20 @@ def _vocab_item(card: Card, vocab: Vocab, sentence: Sentence | None) -> ReviewIt
     )
 
 
-def open_study_service(data_dir: Path | None = None) -> StudyService:
+def open_study_service(
+    data_dir: Path | None = None, *, check_same_thread: bool = True
+) -> StudyService:
+    """``check_same_thread=False`` lets a server use the connections from worker
+    threads; the caller must then serialise access itself."""
     paths = Paths.resolve(data_dir)
     first_run = not paths.database.exists()
     paths.data_dir.mkdir(parents=True, exist_ok=True)
 
-    study_conn = db.connect(paths.database)
+    study_conn = db.connect(paths.database, check_same_thread=check_same_thread)
     db.migrate(study_conn)
     if first_run:
         DeckRepo(study_conn).ensure_default()
 
-    reference_conn = db.connect(BUNDLED_DB)
+    reference_conn = db.connect(BUNDLED_DB, check_same_thread=check_same_thread)
     db.migrate(reference_conn)
     return StudyService(study_conn, reference_conn)

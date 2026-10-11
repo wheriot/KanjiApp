@@ -195,6 +195,12 @@ README.md
 - Kanji "Parts" (e.g. 明 = 日 sun + 月 moon, with the phonetic part flagged) parsed from the KanjiVG groups already in `kanji.db`; shown on the kanji detail panel and the review answer
 - Not done: AI-generated starter mnemonics, related-kanji families (same component + on-reading)
 
+### Post-roadmap — phone reviews ✅
+- `uv run --extra web kanji-web` serves a phone-sized review page from this PC; reached from the iPhone through Tailscale (`tailscale serve`), installed via Safari "Add to Home Screen"
+- Reviews only, all three answer modes, on the deck currently selected on the desktop (now persisted, so the desktop also reopens on it); progress shared through the same `study.db`
+- New dependencies: `fastapi` + `uvicorn` as the optional `web` extra (desktop-only installs skip them); `httpx2` in the dev group for FastAPI's test client
+- Not done: offline use, Browse/Stats/mnemonic editing on the phone, a deck picker
+
 ### Post-roadmap — wider multiple-choice, review history, copy support ✅
 - Multiple-choice review now offers 12 options (three rows of four, up from 4) so an established deck can't be guessed through; button text is elided with a tooltip holding the full option so a long gloss can't stretch the window
 - Review screen "History" button lists the deck's most recently answered cards (word, rating, when, time taken) via `StudyService.review_history`

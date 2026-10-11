@@ -22,9 +22,12 @@ SCHEMA_VERSION = 1
 _ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (("vocab", "grade", "INTEGER"),)
 
 
-def connect(database: Path | str) -> sqlite3.Connection:
+def connect(database: Path | str, *, check_same_thread: bool = True) -> sqlite3.Connection:
     """Open a tuned connection. Pass ``":memory:"`` for tests."""
-    conn = sqlite3.connect(database, isolation_level=None)
+    # timeout: wait for the other process (desktop app / web server) to finish a write
+    conn = sqlite3.connect(
+        database, isolation_level=None, check_same_thread=check_same_thread, timeout=10
+    )
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")

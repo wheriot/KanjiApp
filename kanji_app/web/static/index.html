@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Kanji">
+<meta name="theme-color" content="#f6f4ef" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#17171b" media="(prefers-color-scheme: dark)">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-180.png">
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="style.css">
+<title>Kanji Reviews</title>
+</head>
+<body>
+<header class="bar">
+  <span id="deck" class="deck"></span>
+  <span id="progress" class="progress"></span>
+</header>
+
+<main class="stage">
+  <section id="card" class="card" hidden>
+    <div id="prompt" class="prompt"></div>
+    <div id="prompt-note" class="note"></div>
+    <div id="answer-side" class="answer-side" hidden>
+      <div id="verdict" class="verdict" hidden></div>
+      <div id="answer" class="answer"></div>
+      <div id="answer-note" class="note"></div>
+      <div id="stroke" class="stroke" aria-hidden="true"></div>
+      <p id="sentence" class="sentence" hidden></p>
+      <p id="memory" class="memory" hidden></p>
+    </div>
+  </section>
+
+  <section id="message" class="message" hidden>
+    <h1 id="message-title"></h1>
+    <p id="message-body"></p>
+    <p id="message-sub" class="sub"></p>
+    <button id="refresh" class="btn" type="button">Check again</button>
+  </section>
+</main>
+
+<footer id="controls" class="controls"></footer>
+
+<script src="app.js"></script>
+</body>
+</html>

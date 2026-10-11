@@ -10,6 +10,7 @@ from kanji_app.data.repositories import SettingsRepo
 THEMES = ("system", "light", "dark")
 REVIEW_INPUTS = ("reveal", "choose", "type")
 
+_CURRENT_DECK_KEY = "current_deck_id"
 _RETENTION_MIN = 0.80
 _RETENTION_MAX = 0.97
 
@@ -48,6 +49,13 @@ class SettingsStore:
         self._repo.set("fsrs_retention", f"{settings.fsrs_retention:.2f}")
         self._repo.set("review_input", settings.review_input)
         return settings
+
+    def current_deck_id(self) -> int | None:
+        value = self._repo.get(_CURRENT_DECK_KEY)
+        return int(value) if value is not None and value.isdigit() else None
+
+    def set_current_deck_id(self, deck_id: int) -> None:
+        self._repo.set(_CURRENT_DECK_KEY, str(deck_id))
 
 
 def _as_float(value: str | None, fallback: float) -> float:
