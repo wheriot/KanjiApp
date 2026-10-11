@@ -12,6 +12,7 @@ noted in [README.md](README.md).
 
 ```
 ui  ->  ui.view_models  ->  services  ->  core / data
+web ---------------------->  services  ->  core / data
 ```
 
 - **`kanji_app/core/`** — pure domain logic. No Qt. No SQL. No filesystem.
@@ -22,6 +23,8 @@ ui  ->  ui.view_models  ->  services  ->  core / data
 - **`kanji_app/services/`** — use-cases that combine `core` + `data`. No Qt.
 - **`kanji_app/ui/`** — PySide6. Views talk to view-models; view-models talk to
   services. Views never import `data` or touch SQLite.
+- **`kanji_app/web/`** — FastAPI phone-review server (optional `web` extra). Talks
+  to services only; no Qt, no `data` imports. `ui` and `web` never import each other.
 
 Never add an import that points "up" this list.
 
@@ -56,6 +59,7 @@ uv run kanji-app                     # run the app
 uv run python scripts/check.py       # ruff + ruff format + mypy + pytest
 uv run pytest                        # tests only
 uv run python -m scripts.build_db    # rebuild kanji_app/resources/kanji.db
+uv run --extra web kanji-web         # phone review server on 127.0.0.1:8000
 ```
 
 Run `scripts/check.py` and make it green before considering a change done.
@@ -190,9 +194,31 @@ catalog `browse` default `limit` is 5000 to cover the full set.
   `QLabel` can't be mouse-selected. The kanji/vocab Browse detail panels' headword labels get
   the same selectable flag.
 
+## Phone reviews (`kanji_app/web/`)
+
+- `kanji-web` (`web/__main__.py`) opens its own `StudyService` on the desktop's
+  `study.db` with `check_same_thread=False`; `web/app.py` serialises every use of it
+  behind one lock. Two processes share the db (WAL, `connect(..., timeout=10)`).
+- Each request calls `StudyService.reload_settings()` and `current_deck()` so desktop
+  changes (review mode, selected deck) apply without a restart. The selected deck is
+  persisted in the `setting` table (`current_deck_id`) by `DeckController.select`.
+- API: `GET /api/review` (deck, summary, next card via `StudyService.next_item`),
+  `POST /api/review/{id}/rate` (reveal mode), `POST /api/review/{id}/submit`
+  (choose/type, graded server-side by `submit_answer` with `core/grading.py`, the same
+  functions the desktop view-model uses). Choose mode submits the option *text*, since
+  options are reshuffled on every render. `schemas.card_out(with_answer=False)` withholds
+  answer-side fields until graded.
+- `StudyService.answer` / `answer_card` always schedule from the card's stored state, so
+  a stale copy answered on another device can't overwrite progress.
+- `web/static/` is a no-build page (HTML/CSS/vanilla JS). Server text goes in via
+  `textContent`; only `stroke_svg` (rendered from bundled KanjiVG) uses `innerHTML`.
+  Icons were drawn from the KanjiVG strokes for 漢 (offscreen Qt has no CJK font).
+- Tests: `tests/test_web_api.py` uses FastAPI's `TestClient` (needs `httpx2`, dev group)
+  with a `check_same_thread=False` service fixture.
+
 ## Roadmap status
 
 Phases 0–7 are done, plus follow-ups (full Jōyō, bulk add, sentences, romaji,
-smart deck, review modes, card pool + reset timer, mnemonics, review history + copy support).
+smart deck, review modes, card pool + reset timer, mnemonics, review history + copy support, phone reviews).
 Remaining items are under
 PLAN.md "Later / optional" (audio, PyInstaller, handwriting).

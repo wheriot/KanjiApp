@@ -22,6 +22,40 @@ uv sync
 uv run kanji-app
 ```
 
+## Phone reviews (optional)
+
+Review on your phone, served from this computer. Progress is shared with the
+desktop app (same `study.db`), and the phone always uses the deck currently
+selected on the desktop, in the review mode chosen in Settings.
+
+1. Start the server (listens on this PC only, `http://127.0.0.1:8000`):
+
+   ```
+   uv run --extra web kanji-web
+   ```
+
+2. Install [Tailscale](https://tailscale.com/download) on this PC and on the
+   phone (App Store), signed into the same account. In the Tailscale admin
+   console, under **DNS**, turn on **MagicDNS** and **HTTPS Certificates**.
+
+3. Publish the server to your own devices only (survives reboots):
+
+   ```
+   tailscale serve --bg 8000
+   ```
+
+   It prints an address like `https://<pc-name>.<tailnet>.ts.net`.
+
+4. On the iPhone, open that address in Safari → **Share** → **Add to Home
+   Screen**.
+
+To keep it available, add a Task Scheduler task that runs at log on with
+program `uv` and arguments
+`run --project "<path to this repo>" --extra web kanji-web`, and set the PC not
+to sleep while plugged in. Avoid reviewing on the desktop and phone at the same
+time: nothing breaks, but a card answered on one can still appear in the
+other's open session. Don't port-forward the server to the internet.
+
 ## Develop
 
 ```

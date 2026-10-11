@@ -19,7 +19,7 @@ class DeckController(QObject):
     def __init__(self, study: StudyService) -> None:
         super().__init__()
         self._study = study
-        self._current = study.default_deck()
+        self._current = study.current_deck()
 
     # -- state ------------------------------------------------------
 
@@ -48,6 +48,7 @@ class DeckController(QObject):
         deck = self._study.get_deck(deck_id)
         if deck is not None:
             self._current = deck
+            self._study.set_current_deck(deck.id)
             self.current_changed.emit(deck.id)
 
     def create(self, name: str) -> Deck:
@@ -73,6 +74,7 @@ class DeckController(QObject):
         self.decks_changed.emit()
         if deck_id == self._current.id:
             self._current = self._study.default_deck()
+            self._study.set_current_deck(self._current.id)
             self.current_changed.emit(self._current.id)
         return True
 

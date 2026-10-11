@@ -17,9 +17,9 @@ from datetime import UTC, datetime
 
 from PySide6.QtCore import QObject, Signal
 
+from kanji_app.core.grading import matches_reading, rating_for
 from kanji_app.core.models import Rating
 from kanji_app.core.review_session import DeckCounts
-from kanji_app.core.romaji import to_kana
 from kanji_app.services.study import ReviewHistoryRow, ReviewItem, StudyService, TodaySummary
 
 
@@ -113,7 +113,7 @@ class ReviewViewModel(QObject):
         item = self.current
         if item is None or self._revealed:
             return
-        self._grade_and_reveal(_matches_reading(text, item.accepted))
+        self._grade_and_reveal(matches_reading(text, item.accepted))
 
     def set_mnemonic(self, text: str) -> None:
         """Save the learner's note for the current card's subject."""
@@ -135,7 +135,7 @@ class ReviewViewModel(QObject):
         """``choose`` / ``type`` mode: apply the auto-grade and advance."""
         if self.current is None or self._graded_correct is None:
             return
-        rating = Rating.GOOD if self._graded_correct else Rating.AGAIN
+        rating = rating_for(self._graded_correct)
         self._commit(rating, now)
 
     # -- internals ----------------------------------------------
@@ -163,19 +163,3 @@ class ReviewViewModel(QObject):
         self._answered = 0
         self._graded_correct = None
         self.state_changed.emit()
-
-
-def _normalise_reading(text: str) -> str:
-    folded = to_kana(text.strip())
-    out = []
-    for ch in folded:
-        code = ord(ch)
-        out.append(chr(code - 0x60) if 0x30A1 <= code <= 0x30F6 else ch)
-    return "".join(c for c in out if c not in "ー・.-")
-
-
-def _matches_reading(text: str, accepted: tuple[str, ...]) -> bool:
-    if not text.strip() or not accepted:
-        return False
-    guess = _normalise_reading(text)
-    return any(guess == _normalise_reading(a) for a in accepted)
