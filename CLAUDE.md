@@ -173,8 +173,26 @@ catalog `browse` default `limit` is 5000 to cover the full set.
 - Opening `kanji.db` runs `migrate`, so a new schema table dirties the tracked binary; restore
   it (`git checkout -- kanji_app/resources/kanji.db`) rather than committing that.
 
+## Multiple-choice sizing, review history, copy support
+
+- `CHOICE_COUNT = 12` in `services/study.py` (three rows of four); `ReviewView` buttons are
+  capped at `_CHOICE_MAX_WIDTH` and their label text is shortened by `_elided()` so a long
+  vocab gloss can't stretch the grid/window — the full text is always set as the tooltip.
+- `ReviewLogRepo.recent(deck_id, limit)` (newest first) → `StudyService.review_history()` →
+  `ReviewHistoryRow` (headword/gloss resolved the same way as `deck_cards`). `ReviewView`'s
+  "History" button opens `ReviewHistoryDialog` (`ui/views/review_history_view.py`), a snapshot
+  table, not live-updating while open.
+- `ReviewItem.headword` is the kanji literal / vocab expression regardless of card mode (recall
+  cards only reveal it in the answer) — used by the "Copy word" button
+  (`ReviewView._can_copy_word`: enabled for recognition cards always, recall cards only once
+  revealed, so it never leaks the answer). `CardFace` labels use `TextSelectableByMouse` for
+  manual copy/paste of any field. Don't dim card text with `setEnabled(False)` — a disabled
+  `QLabel` can't be mouse-selected. The kanji/vocab Browse detail panels' headword labels get
+  the same selectable flag.
+
 ## Roadmap status
 
 Phases 0–7 are done, plus follow-ups (full Jōyō, bulk add, sentences, romaji,
-smart deck, review modes, card pool + reset timer, mnemonics). Remaining items are under
+smart deck, review modes, card pool + reset timer, mnemonics, review history + copy support).
+Remaining items are under
 PLAN.md "Later / optional" (audio, PyInstaller, handwriting).

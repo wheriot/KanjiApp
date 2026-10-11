@@ -21,12 +21,12 @@ class CardFace(QWidget):
 
         self._prompt = _text(28)
         self._prompt.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self._prompt_note = _text(16, faint=True)
+        self._prompt_note = _text(16)
         self._divider = QLabel()
         self._divider.setFixedHeight(1)
         self._divider.setStyleSheet("background: palette(mid);")
         self._answer = _text(24)
-        self._answer_note = _text(15, faint=True)
+        self._answer_note = _text(15)
         self._sentence = _text(14)
         self._sentence.setContentsMargins(24, 8, 24, 0)
         self._memory = _text(13)
@@ -110,13 +110,12 @@ def _memory_text(item: ReviewItem) -> str:
     return "\n".join(lines)
 
 
-def _text(point_size: int, *, faint: bool = False) -> QLabel:
+def _text(point_size: int) -> QLabel:
     label = QLabel()
     label.setAlignment(Qt.AlignmentFlag.AlignCenter)
     label.setWordWrap(True)
+    label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
     font = label.font()
     font.setPointSize(point_size)
     label.setFont(font)
-    if faint:
-        label.setEnabled(False)
     return label

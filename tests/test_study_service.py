@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from kanji_app.core.models import CardMode, Rating
+from kanji_app.data.repositories import KanjiRepo
 from kanji_app.services.study import StudyService, open_study_service
 
 NOON = datetime(2026, 5, 1, 12, 0, tzinfo=UTC)
@@ -26,6 +27,17 @@ def test_start_session_returns_recognition_and_recall_items(study_service: Study
     study_service.add_kanji(deck.id, 1, NOON)
     modes = {item.card.mode for item in study_service.start_session(deck.id, NOON)}
     assert modes == {CardMode.RECOGNITION, CardMode.RECALL}
+
+
+def test_review_items_carry_the_headword_regardless_of_mode(
+    study_service: StudyService, reference_repo: KanjiRepo
+) -> None:
+    kanji = reference_repo.get(1)
+    assert kanji is not None
+    deck = study_service.default_deck()
+    study_service.add_kanji(deck.id, 1, NOON)
+    for item in study_service.start_session(deck.id, NOON):
+        assert item.headword == kanji.literal
 
 
 def test_new_card_daily_limit_is_enforced(study_service: StudyService) -> None:
@@ -73,6 +85,32 @@ def test_deck_cards_lists_every_card_with_headword_and_gloss(study_service: Stud
     assert modes == {CardMode.RECOGNITION, CardMode.RECALL}
     assert all(row.headword for row in rows)
     assert all(row.gloss for row in rows)
+
+
+def test_review_history_is_newest_first_with_headword_and_rating(
+    study_service: StudyService,
+) -> None:
+    deck = study_service.default_deck()
+    study_service.add_kanji(deck.id, 1, NOON)
+    items = study_service.start_session(deck.id, NOON)
+
+    study_service.answer(items[0].card, Rating.AGAIN, NOON)
+    study_service.answer(items[1].card, Rating.GOOD, NOON + timedelta(minutes=1))
+
+    history = study_service.review_history(deck.id)
+    assert len(history) == 2
+    assert history[0].log.rating == Rating.GOOD  # most recent first
+    assert history[1].log.rating == Rating.AGAIN
+    assert all(row.headword == items[0].headword for row in history)
+
+
+def test_review_history_respects_the_limit(study_service: StudyService) -> None:
+    deck = study_service.default_deck()
+    study_service.add_kanji(deck.id, 1, NOON)
+    for item in study_service.start_session(deck.id, NOON):
+        study_service.answer(item.card, Rating.GOOD, NOON)
+
+    assert len(study_service.review_history(deck.id, limit=1)) == 1
 
 
 def test_progress_survives_reopen(tmp_path: Path) -> None:

@@ -57,3 +57,32 @@ def test_review_log_counts(conn: sqlite3.Connection) -> None:
     assert log.count_since(deck.id, day_start) == 4
     assert log.count_new_since(deck.id, day_start) == 2  # 2 cards' first reviews
     assert log.count_since(deck.id, NOW + timedelta(minutes=5)) == 2
+
+
+def test_review_log_recent_is_newest_first_and_respects_the_limit(
+    conn: sqlite3.Connection,
+) -> None:
+    deck = DeckRepo(conn).ensure_default()
+    other_deck = DeckRepo(conn).create("Other")
+    cards = CardRepo(conn)
+    log = ReviewLogRepo(conn)
+    sched = FsrsScheduler()
+
+    card = cards.create(deck.id, SubjectType.KANJI, 1, CardMode.RECOGNITION, sched.new_state(NOW))
+    other_card = cards.create(
+        other_deck.id, SubjectType.KANJI, 2, CardMode.RECOGNITION, sched.new_state(NOW)
+    )
+    state = card.scheduling
+    for i in range(3):
+        result = sched.review(state, Rating.GOOD, NOW + timedelta(minutes=i))
+        log.record(card.id, Rating.GOOD, result, NOW + timedelta(minutes=i))
+        state = result.state
+    other_result = sched.review(other_card.scheduling, Rating.AGAIN, NOW)
+    log.record(other_card.id, Rating.AGAIN, other_result, NOW)  # a different deck
+
+    recent = log.recent(deck.id, limit=2)
+    assert [r.reviewed_at for r in recent] == [
+        NOW + timedelta(minutes=2),
+        NOW + timedelta(minutes=1),
+    ]
+    assert all(r.card_id == card.id for r in recent)

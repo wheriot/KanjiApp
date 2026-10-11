@@ -104,6 +104,7 @@ class VocabBrowserView(QWidget):
         expr_font = self._expression.font()
         expr_font.setPointSize(32)
         self._expression.setFont(expr_font)
+        self._expression.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self._kana = QLabel()
         self._glosses = QLabel()
         self._glosses.setWordWrap(True)

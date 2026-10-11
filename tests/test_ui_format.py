@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from kanji_app.ui.format import countdown, relative_time
+from kanji_app.ui.format import absolute_time, countdown, relative_time
 
 
 def test_relative_time_buckets_by_magnitude() -> None:
@@ -20,3 +20,10 @@ def test_countdown_formats_hours_and_minutes() -> None:
     assert countdown(now + timedelta(minutes=5, seconds=5)) == "5m"
     assert countdown(now + timedelta(seconds=10)) == "<1m"
     assert countdown(now - timedelta(minutes=5)) == "<1m"  # already passed, clamps at zero
+
+
+def test_absolute_time_formats_as_local_date_and_minute() -> None:
+    when = datetime(2026, 9, 27, 14, 32, tzinfo=UTC)
+    formatted = absolute_time(when)
+    assert formatted == when.astimezone().strftime("%Y-%m-%d %H:%M")
+    assert len(formatted) == 16  # "YYYY-MM-DD HH:MM"

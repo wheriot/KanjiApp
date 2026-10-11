@@ -22,6 +22,7 @@ from kanji_app.core.models import (
     Rating,
     Reading,
     ReadingType,
+    ReviewLog,
     SchedulingState,
     Sentence,
     SubjectType,
@@ -560,6 +561,20 @@ class ReviewLogRepo:
             ),
         )
 
+    def recent(self, deck_id: int, limit: int = 50) -> list[ReviewLog]:
+        """The deck's most recently answered reviews, newest first."""
+        rows = self._conn.execute(
+            """
+            SELECT rl.* FROM review_log rl
+            JOIN card c ON c.id = rl.card_id
+            WHERE c.deck_id = ?
+            ORDER BY rl.reviewed_at DESC
+            LIMIT ?
+            """,
+            (deck_id, limit),
+        ).fetchall()
+        return [_review_log_row(r) for r in rows]
+
     def count_since(self, deck_id: int, since: datetime) -> int:
         row = self._conn.execute(
             """
@@ -661,6 +676,20 @@ class MnemonicRepo:
             "ON CONFLICT(subject_type, subject_id) DO UPDATE SET text = excluded.text",
             (subject_type.value, subject_id, text.strip()),
         )
+
+
+def _review_log_row(row: sqlite3.Row) -> ReviewLog:
+    return ReviewLog(
+        id=row["id"],
+        card_id=row["card_id"],
+        reviewed_at=_dt(row["reviewed_at"]),
+        rating=Rating(row["rating"]),
+        elapsed_ms=row["elapsed_ms"],
+        prev_due=_dt(row["prev_due"]),
+        new_due=_dt(row["new_due"]),
+        prev_stability=row["prev_stability"],
+        new_stability=row["new_stability"],
+    )
 
 
 def _scheduling_params(s: SchedulingState) -> dict[str, object]:

@@ -20,7 +20,7 @@ from PySide6.QtCore import QObject, Signal
 from kanji_app.core.models import Rating
 from kanji_app.core.review_session import DeckCounts
 from kanji_app.core.romaji import to_kana
-from kanji_app.services.study import ReviewItem, StudyService, TodaySummary
+from kanji_app.services.study import ReviewHistoryRow, ReviewItem, StudyService, TodaySummary
 
 
 class ReviewViewModel(QObject):
@@ -71,6 +71,13 @@ class ReviewViewModel(QObject):
 
     def today_summary(self) -> TodaySummary:
         return self._study.today_summary(self._deck_id)
+
+    def history(self, limit: int = 50) -> list[ReviewHistoryRow]:
+        return self._study.review_history(self._deck_id, limit)
+
+    def deck_name(self) -> str:
+        deck = self._study.get_deck(self._deck_id)
+        return deck.name if deck else ""
 
     # -- commands -------------------------------------------------
 
