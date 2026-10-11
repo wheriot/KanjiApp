@@ -195,6 +195,11 @@ README.md
 - Kanji "Parts" (e.g. 明 = 日 sun + 月 moon, with the phonetic part flagged) parsed from the KanjiVG groups already in `kanji.db`; shown on the kanji detail panel and the review answer
 - Not done: AI-generated starter mnemonics, related-kanji families (same component + on-reading)
 
+### Post-roadmap — wider multiple-choice, review history, copy support ✅
+- Multiple-choice review now offers 12 options (three rows of four, up from 4) so an established deck can't be guessed through; button text is elided with a tooltip holding the full option so a long gloss can't stretch the window
+- Review screen "History" button lists the deck's most recently answered cards (word, rating, when, time taken) via `StudyService.review_history`
+- "Copy word" button copies the current card's kanji/word to the clipboard (only once it's actually visible on screen, so recall cards can't leak the answer pre-reveal); all review-card and Browse detail-panel text is now mouse-selectable for manual copy/paste
+
 ### Post-roadmap — bulk add ✅
 - `StudyService.add_kanji_bulk` / `add_vocab_bulk` (one transaction; skip subjects already in the deck)
 - `AddAllButton` on both Browse tabs: adds every kanji/word matching the current filters + search to the current deck, with a confirmation dialog (e.g. filter to Grade 3 → "Add all 200")

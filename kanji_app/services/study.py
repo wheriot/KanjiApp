@@ -29,6 +29,7 @@ from kanji_app.core.models import (
     Kanji,
     Rating,
     ReadingType,
+    ReviewLog,
     Sentence,
     SubjectType,
     Vocab,
@@ -66,6 +67,7 @@ class ReviewItem:
     prompt_note: str
     answer: str
     answer_note: str
+    headword: str = ""  # the kanji literal / vocab expression itself, either side
     stroke: StrokeDrawing | None = None
     sentence: Sentence | None = None
     # "choose" mode: shuffled answer candidates and the index of the right one
@@ -107,6 +109,17 @@ class CardPoolRow:
     card: Card
     headword: str
     gloss: str
+
+
+@dataclass(frozen=True, slots=True)
+class ReviewHistoryRow:
+    """One past answer, newest first, with its subject text pre-rendered."""
+
+    log: ReviewLog
+    headword: str
+    gloss: str
+    subject_type: SubjectType
+    mode: CardMode
 
 
 class StudyService:
@@ -299,6 +312,24 @@ class StudyService:
             for card in self._cards.for_deck(deck_id)
         ]
 
+    def review_history(self, deck_id: int, limit: int = 50) -> list[ReviewHistoryRow]:
+        """The deck's most recently answered reviews, newest first."""
+        rows = []
+        for log in self._log.recent(deck_id, limit):
+            card = self._cards.get(log.card_id)
+            if card is None:
+                continue
+            rows.append(
+                ReviewHistoryRow(
+                    log=log,
+                    headword=self._choice_text(card.subject_type, card.subject_id, recall=True),
+                    gloss=self._choice_text(card.subject_type, card.subject_id, recall=False),
+                    subject_type=card.subject_type,
+                    mode=card.mode,
+                )
+            )
+        return rows
+
     def start_session(self, deck_id: int, now: datetime | None = None) -> list[ReviewItem]:
         moment = now or datetime.now(UTC)
         deck = self._decks.get(deck_id)
@@ -439,6 +470,7 @@ def _kanji_item(card: Card, kanji: Kanji, stroke: StrokeDrawing | None) -> Revie
             prompt_note=readings,
             answer=kanji.literal,
             answer_note="",
+            headword=kanji.literal,
             stroke=stroke,
         )
     return ReviewItem(
@@ -447,6 +479,7 @@ def _kanji_item(card: Card, kanji: Kanji, stroke: StrokeDrawing | None) -> Revie
         prompt_note="",
         answer=meanings,
         answer_note=readings,
+        headword=kanji.literal,
         stroke=stroke,
     )
 
@@ -461,6 +494,7 @@ def _vocab_item(card: Card, vocab: Vocab, sentence: Sentence | None) -> ReviewIt
             prompt_note="",
             answer=vocab.expression,
             answer_note=reading,
+            headword=vocab.expression,
             sentence=sentence,
         )
     return ReviewItem(
@@ -469,6 +503,7 @@ def _vocab_item(card: Card, vocab: Vocab, sentence: Sentence | None) -> ReviewIt
         prompt_note="",
         answer=glosses,
         answer_note=reading,
+        headword=vocab.expression,
         sentence=sentence,
     )
 

@@ -36,6 +36,7 @@ class KanjiDetailPanel(QWidget):
         literal_font.setPointSize(64)
         self._literal.setFont(literal_font)
         self._literal.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._literal.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
 
         self._meanings = QLabel()
         self._meanings.setWordWrap(True)

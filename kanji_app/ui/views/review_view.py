@@ -8,7 +8,7 @@ switched by ``(input_mode, phase)``.
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtGui import QGuiApplication, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
@@ -21,14 +21,16 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from kanji_app.core.models import Rating
-from kanji_app.services.study import CHOICE_COUNT
+from kanji_app.core.models import CardMode, Rating
+from kanji_app.services.study import CHOICE_COUNT, ReviewItem
 from kanji_app.ui.format import countdown, relative_time
 from kanji_app.ui.view_models.review_vm import ReviewViewModel
+from kanji_app.ui.views.review_history_view import ReviewHistoryDialog
 from kanji_app.ui.widgets.card_widget import CardFace
 
 _RATING_KEYS = {Rating.AGAIN: "1", Rating.HARD: "2", Rating.GOOD: "3", Rating.EASY: "4"}
 _CHOICE_COLUMNS = 4
+_CHOICE_MAX_WIDTH = 220  # keeps a long option from stretching the grid/window
 _IDLE, _REVEAL_Q, _REVEAL_A, _CHOOSE_Q, _TYPE_Q, _CONTINUE = range(6)
 
 
@@ -41,9 +43,23 @@ class ReviewView(QWidget):
         self._status.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._card = CardFace()
 
+        self._history_button = QPushButton("History")
+        self._history_button.setFlat(True)
+        self._history_button.clicked.connect(self._show_history)
+
+        self._copy_button = QPushButton("Copy word")
+        self._copy_button.setFlat(True)
+        self._copy_button.clicked.connect(self._copy_word)
+
         self._note_button = QPushButton("Edit mnemonic")
         self._note_button.setFlat(True)
         self._note_button.clicked.connect(self._edit_mnemonic)
+
+        toolbar = QHBoxLayout()
+        toolbar.addWidget(self._history_button)
+        toolbar.addStretch(1)
+        toolbar.addWidget(self._copy_button)
+        toolbar.addWidget(self._note_button)
 
         self._footer = QStackedWidget()
         self._footer.addWidget(self._build_idle_page())
@@ -56,7 +72,7 @@ class ReviewView(QWidget):
         layout = QVBoxLayout(self)
         layout.addWidget(self._status)
         layout.addWidget(self._card, stretch=1)
-        layout.addWidget(self._note_button, alignment=Qt.AlignmentFlag.AlignRight)
+        layout.addLayout(toolbar)
         layout.addWidget(self._footer)
 
         self._install_shortcuts()
@@ -103,6 +119,7 @@ class ReviewView(QWidget):
         self._choice_buttons: list[QPushButton] = []
         for index in range(CHOICE_COUNT):
             button = QPushButton()
+            button.setMaximumWidth(_CHOICE_MAX_WIDTH)
             button.clicked.connect(lambda _=False, i=index: self._vm.choose(i))
             self._choice_buttons.append(button)
             grid.addWidget(button, index // _CHOICE_COLUMNS, index % _CHOICE_COLUMNS)
@@ -167,6 +184,22 @@ class ReviewView(QWidget):
         if ok:
             self._vm.set_mnemonic(text)
 
+    def _show_history(self) -> None:
+        ReviewHistoryDialog(self._vm.history(), self._vm.deck_name()).exec()
+
+    def _copy_word(self) -> None:
+        item = self._vm.current
+        if item is None or not self._can_copy_word(item):
+            return
+        clipboard = QGuiApplication.clipboard()
+        if clipboard is not None:
+            clipboard.setText(item.headword)
+
+    def _can_copy_word(self, item: ReviewItem) -> bool:
+        # the headword is the prompt in recognition mode (always visible) but the
+        # answer in recall mode, so only offer it once it's actually on screen.
+        return item.card.mode == CardMode.RECOGNITION or self._vm.revealed
+
     # -- rendering -----------------------------------------------
 
     def start_session(self) -> None:
@@ -180,6 +213,7 @@ class ReviewView(QWidget):
         item = self._vm.current
         self._card.show_item(item, self._vm.revealed)
         self._note_button.setVisible(item is not None and self._vm.revealed)
+        self._copy_button.setVisible(item is not None and self._can_copy_word(item))
 
         if item is None:
             self._footer.setCurrentIndex(_IDLE)
@@ -201,8 +235,10 @@ class ReviewView(QWidget):
         if self._vm.input_mode == "choose":
             options = self._vm.current.options if self._vm.current else ()
             for i, button in enumerate(self._choice_buttons):
-                button.setText(options[i] if i < len(options) else "")
-                button.setVisible(bool(button.text()))
+                text = options[i] if i < len(options) else ""
+                button.setToolTip(text)
+                button.setText(_elided(button, text))
+                button.setVisible(bool(text))
             return _CHOOSE_Q
         if self._vm.input_mode == "type":
             self._reading_input.clear()
@@ -255,3 +291,9 @@ class ReviewView(QWidget):
 
 def _s(n: int) -> str:
     return "" if n == 1 else "s"
+
+
+def _elided(button: QPushButton, text: str) -> str:
+    """``text`` shortened to fit the button, with an ellipsis if it was cut."""
+    available = button.maximumWidth() - 24  # room for the button's own padding
+    return button.fontMetrics().elidedText(text, Qt.TextElideMode.ElideRight, available)
